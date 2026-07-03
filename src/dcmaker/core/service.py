@@ -161,13 +161,28 @@ def _animated(req: ConvertRequest, settings: Settings, preset: Preset,
 
         progress(f"[source] {src.width}x{src.height}  {src.frames} frames  "
                  f"{src.fps:g}fps")
-        if fmt == "gif":
-            enc = GifEncoder(ff, Gifsicle(settings.gifsicle), src, tmp,
-                             req.colors, req.dither, lossy)
-        else:
-            enc = ApngEncoder(ff, src, tmp)
-        r = compress_animated(ff, enc, src, trim, preset, priority, min_fps,
-                              out, tmp, progress)
+        # borderline clips can miss the budget at the preset's lossy level;
+        # escalate (visible artifacts beat "does not fit") unless the user
+        # pinned --lossy themselves
+        lossy_steps = ([lossy] if req.lossy is not None or fmt != "gif"
+                       else [lossy, lossy + 40, lossy + 80])
+        for i, step in enumerate(lossy_steps):
+            if fmt == "gif":
+                enc = GifEncoder(ff, Gifsicle(settings.gifsicle), src, tmp,
+                                 req.colors, req.dither, step)
+            else:
+                enc = ApngEncoder(ff, src, tmp)
+            try:
+                r = compress_animated(ff, enc, src, trim, preset, priority,
+                                      min_fps, out, tmp, progress)
+                if i:
+                    notes.append(f"lossy escalated to {step} to fit budget")
+                break
+            except ValueError:
+                if i == len(lossy_steps) - 1:
+                    raise
+                progress(f"[retry] nothing fits at lossy={step}, "
+                         f"trying lossy={lossy_steps[i + 1]}")
     res = _result(r, fmt, kind, preset)
     res.notes = notes
     return res

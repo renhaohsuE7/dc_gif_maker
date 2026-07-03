@@ -26,6 +26,9 @@ dcmaker = "dcmaker.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"dcmaker.web" = ["static/*"]
+
 [tool.setuptools.dynamic]
 version = { attr = "dcmaker.__version__" }
 

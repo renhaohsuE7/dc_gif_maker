@@ -1,3 +1,17 @@
+# gifsicle pinned at 1.95: Debian trixie's 1.96 --lossy is ineffective on
+# flat-colour anime frames (0.06% vs 43% saving on the same input — see
+# docs/references/2026-07-03-gifsicle-196-lossy-regression.md)
+FROM python:3.12-slim AS gifsicle-build
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' \
+        /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        build-essential wget ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN wget -qO- https://www.lcdf.org/gifsicle/gifsicle-1.95.tar.gz | tar xz \
+    && cd gifsicle-1.95 \
+    && ./configure --disable-gifview --disable-gifdiff \
+    && make -j"$(nproc)" && make install
+
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -31,6 +45,9 @@ COPY src ./src
 RUN pip install --no-deps .
 COPY tests ./tests
 COPY samples/original ./samples/original
+
+# /usr/local/bin precedes /usr/bin, so the pinned 1.95 shadows apt's 1.96
+COPY --from=gifsicle-build /usr/local/bin/gifsicle /usr/local/bin/gifsicle
 
 EXPOSE 8000
 VOLUME /data

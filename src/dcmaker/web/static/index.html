@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dcmaker — Discord 貼圖 / 表情產生器</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<main>
+  <h1><span class="icon" data-icon="sticker"></span>dcmaker</h1>
+  <p class="sub">丟進 GIF / SVG / PNG,產出符合 Discord 規格的貼圖(320×320、≤512KB)
+    或表情(128×128、&lt;256KB),透明背景全程保留。動畫 SVG 會用無頭瀏覽器逐幀截圖。</p>
+
+  <form class="card" id="form">
+    <div id="drop" tabindex="0" role="button" aria-label="選擇或拖放檔案">
+      <span class="icon" data-icon="upload"></span>
+      <span id="dropText">拖放檔案到這裡,或點擊選擇(.gif .svg .png .jpg .webp)</span>
+      <input type="file" id="file" accept=".gif,.svg,.png,.jpg,.jpeg,.webp">
+    </div>
+
+    <fieldset>
+      <legend>輸出路線</legend>
+      <label class="opt"><input type="radio" name="preset" value="sticker" checked>
+        <span class="icon" data-icon="sticker"></span>貼圖 320×320 ≤512KB</label>
+      <label class="opt"><input type="radio" name="preset" value="emoji">
+        <span class="icon" data-icon="smile"></span>表情 128×128 &lt;256KB</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>格式</legend>
+      <label class="opt"><input type="radio" name="fmt" value="auto" checked>自動</label>
+      <label class="opt"><input type="radio" name="fmt" value="gif">GIF</label>
+      <label class="opt"><input type="radio" name="fmt" value="apng">APNG(8-bit 透明)</label>
+      <label class="opt"><input type="radio" name="fmt" value="png">PNG(靜態)</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>取向(動畫)</legend>
+      <label class="opt"><input type="radio" name="priority" value="" checked>預設</label>
+      <label class="opt"><input type="radio" name="priority" value="frames">最流暢</label>
+      <label class="opt"><input type="radio" name="priority" value="balanced">平衡</label>
+      <label class="opt"><input type="radio" name="priority" value="resolution">角色最大</label>
+    </fieldset>
+
+    <details>
+      <summary>進階:裁短片長 / SVG 動畫長度</summary>
+      <p>
+        <label>起點 <input name="ss" placeholder="0 或 0:02"></label>
+        <label>終點 <input name="to" placeholder="5"></label>
+        <label>SVG 秒數 <input name="duration" placeholder="自動偵測"></label>
+      </p>
+      <p>裁短片長是體積最大的槓桿 —— 貼圖想「又大又順」就把片段裁到 5 秒內。</p>
+    </details>
+
+    <button id="go" type="submit" disabled>
+      <span class="icon" data-icon="wand"></span><span id="goText">開始轉換</span>
+    </button>
+    <p id="error" class="hide"><span class="icon" data-icon="alert"></span><span></span></p>
+  </form>
+
+  <section class="card hide" id="result">
+    <img alt="轉換結果預覽">
+    <div class="budget"><div></div></div>
+    <div class="meta"></div>
+    <a class="dl" download><span class="icon" data-icon="download"></span>下載</a>
+  </section>
+
+  <footer>ffmpeg palettegen/paletteuse + gifsicle lossy + headless Chromium ·
+    自動搜尋塞得進預算的最高幀率</footer>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

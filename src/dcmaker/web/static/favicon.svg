@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="#6b8afd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- dcmaker mark: a sticker being peeled (line-based, self-made) -->
+  <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8l-6 6H6a2 2 0 0 1-2-2z"/>
+  <path d="M14 20v-4a2 2 0 0 1 2-2h4"/>
+  <circle cx="9.5" cy="10" r="0.5"/>
+  <circle cx="14.5" cy="10" r="0.5"/>
+</svg>

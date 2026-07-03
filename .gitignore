@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+
+# env / secrets
+.env
+
+# reference clones are local-only (keep the README)
+docs/references/external_repos/*
+!docs/references/external_repos/README.md
+
+# generated artefacts (originals/fixtures stay tracked)
+samples/output/
+data/
+
+# editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+*:Zone.Identifier

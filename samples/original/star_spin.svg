@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- animated demo: SMIL rotation + CSS pulse together, 2s loop -->
+  <style>
+    .pulse { animation: pulse 2s ease-in-out infinite; transform-origin: 50px 50px; }
+    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(0.78); } }
+  </style>
+  <g class="pulse">
+    <path d="M50 8 61 38 93 38 67 57 77 88 50 69 23 88 33 57 7 38 39 38Z"
+          fill="#f5b301" stroke="#8a5a00" stroke-width="3" stroke-linejoin="round">
+      <animateTransform attributeName="transform" type="rotate"
+                        from="0 50 50" to="360 50 50" dur="2s"
+                        repeatCount="indefinite"/>
+    </path>
+  </g>
+</svg>

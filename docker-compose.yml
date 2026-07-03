@@ -1,0 +1,21 @@
+services:
+  dcmaker:
+    build: .
+    image: dcmaker:latest
+    # Chromium + ffmpeg peak together during animated-SVG conversion
+    mem_limit: 2g
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${DCM_PORT:-8000}:8000"
+    environment:
+      DCM_HOST: 0.0.0.0
+      DCM_MAX_UPLOAD_MB: ${DCM_MAX_UPLOAD_MB:-32}
+      DCM_CAPTURE_FPS: ${DCM_CAPTURE_FPS:-24}
+      DCM_CAPTURE_MAX_SECONDS: ${DCM_CAPTURE_MAX_SECONDS:-15}
+      DCM_DEFAULT_DURATION: ${DCM_DEFAULT_DURATION:-3}
+    volumes:
+      - dcmaker-data:/data
+
+volumes:
+  dcmaker-data:

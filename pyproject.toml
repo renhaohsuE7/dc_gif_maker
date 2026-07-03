@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dcmaker"
+description = "Discord emoji + sticker maker: GIF/SVG/PNG in, budget-fitted GIF/APNG/PNG out"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dynamic = ["version"]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "playwright>=1.45",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+cairosvg = ["cairosvg>=2.7"]
+
+[project.scripts]
+dcmaker = "dcmaker.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "dcmaker.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

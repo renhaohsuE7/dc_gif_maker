@@ -5,6 +5,11 @@ ENV PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     DCM_DATA_DIR=/data
 
+# force HTTPS mirrors: the local network's HTTP cache serves stale files
+# (apt "Hash Sum mismatch"); also used by `playwright install --with-deps`
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' \
+        /etc/apt/sources.list.d/debian.sources
+
 # media toolchain + CJK/emoji fonts so SVG <text> renders correctly
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg gifsicle librsvg2-bin pngquant \
@@ -23,6 +28,7 @@ RUN playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 
 COPY tests ./tests
+COPY samples/original ./samples/original
 
 EXPOSE 8000
 VOLUME /data

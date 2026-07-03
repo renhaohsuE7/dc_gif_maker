@@ -5,7 +5,7 @@
   --surface: #ffffff;
   --ink: #1c2333;          /* body text on bg/surface: 13.9:1 / 15.6:1 */
   --ink-soft: #4b5468;     /* secondary text: 7.0:1 on surface */
-  --line: #c7cdd9;         /* borders: 3.0:1+ on surface */
+  --line: #8089a0;         /* borders: 3.5:1 on surface */
   --accent: #3b5bdb;       /* on surface 6.0:1 — links/focus/icons */
   --accent-ink: #ffffff;   /* on accent 6.0:1 */
   --ok: #2b7a3d;
@@ -19,7 +19,7 @@
     --surface: #1b2029;
     --ink: #e8eaf1;        /* 13.5:1 on surface */
     --ink-soft: #a8b0c0;   /* 7.2:1 */
-    --line: #3d4657;
+    --line: #65718f;       /* 3.4:1 on surface */
     --accent: #8da4ff;     /* 6.8:1 on surface */
     --accent-ink: #10131b; /* 7.4:1 on accent */
     --ok: #7bd48e;

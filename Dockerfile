@@ -18,15 +18,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# install python deps first for layer caching
-COPY pyproject.toml README.md ./
-COPY src ./src
-RUN pip install .[dev]
-
-# chromium for animated-SVG capture (--with-deps pulls its shared libs)
+# heavy dependency layers FIRST so src edits rebuild in seconds.
+# keep this list in sync with pyproject [project.dependencies] + dev extra.
+RUN pip install "fastapi>=0.115" "uvicorn[standard]>=0.30" \
+        "python-multipart>=0.0.9" "playwright>=1.45" "pytest>=8"
 RUN playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 
+# the package itself (cheap layer)
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-deps .
 COPY tests ./tests
 COPY samples/original ./samples/original
 

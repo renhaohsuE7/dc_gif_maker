@@ -54,13 +54,14 @@ def fit_fps(encode: Callable[[float], int], src_fps: float, min_fps: float,
 
 
 def choose(results: list[FitResult], priority: str) -> FitResult:
-    """frames -> smallest content (most frames / smoothest); resolution ->
-    largest content (biggest artwork); balanced -> nearest the geometric mean
-    of feasible content sizes."""
+    """frames -> most frames (smoothest), biggest artwork as tie-break (a
+    short loop can keep ALL frames at full canvas — then bigger is free);
+    resolution -> biggest artwork, frames as tie-break; balanced -> nearest
+    the geometric mean of feasible content sizes."""
     rs = sorted(results, key=lambda r: r.key)
     if priority == "frames":
-        return rs[0]
+        return max(rs, key=lambda r: (r.frames, r.key))
     if priority == "resolution":
-        return rs[-1]
+        return max(rs, key=lambda r: (r.key, r.frames))
     logmean = sum(math.log(r.key) for r in rs) / len(rs)
     return min(rs, key=lambda r: abs(math.log(r.key) - logmean))

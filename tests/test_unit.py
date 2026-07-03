@@ -17,15 +17,21 @@ def test_byte_ceiling_uses_stricter_kb_reading():
     assert byte_ceiling(1) == 20_000  # floor for tiny budgets
 
 
-def _r(key, fps=10.0):
-    return FitResult(str(key), key, key, fps, 10, 1000, "x", key)
+def _r(key, frames=10):
+    return FitResult(str(key), key, key, 10.0, frames, 1000, "x", key)
 
 
 def test_choose_priorities():
-    rs = [_r(100), _r(200), _r(400)]
-    assert choose(rs, "frames").key == 100
-    assert choose(rs, "resolution").key == 400
-    assert choose(rs, "balanced").key == 200  # geometric mean of 100..400
+    rs = [_r(100, frames=30), _r(200, frames=20), _r(400, frames=10)]
+    assert choose(rs, "frames").key == 100      # most frames wins
+    assert choose(rs, "resolution").key == 400  # biggest artwork wins
+    assert choose(rs, "balanced").key == 200    # geometric mean of 100..400
+
+
+def test_choose_frames_tiebreak_prefers_bigger_artwork():
+    # a short loop that keeps ALL frames at every size -> bigger is free
+    rs = [_r(100, frames=48), _r(200, frames=48), _r(400, frames=48)]
+    assert choose(rs, "frames").key == 400
 
 
 def test_fit_fps_finds_highest_fitting_fps():

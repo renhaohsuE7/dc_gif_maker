@@ -4,12 +4,14 @@ import tempfile
 
 import pytest
 
+import dcmaker.core.service as service
 from dcmaker.core.animate import webp_info
 from dcmaker.core.budget import FitResult, byte_ceiling, choose, fit_fps
 from dcmaker.core.detect import detect_kind
 from dcmaker.core.geometry import (build_trim, content_sizes, geom_square,
                                    parse_time)
-from dcmaker.core.service import derive_out, resolve_format
+from dcmaker.core.service import (ConvertRequest, convert_many, derive_out,
+                                  is_batch_input, iter_inputs, resolve_format)
 
 
 # ------------------------------------------------------------------ budget
@@ -147,3 +149,69 @@ def test_derive_out_original_sibling():
     out = derive_out("/a/b/x.svg", "dc_emoji_png", "png")
     assert out == os.path.join("/a/b", "x-dc_emoji_png.png")
     assert derive_out("x.gif", "s", "gif", out="/tmp/y.gif") == "/tmp/y.gif"
+
+
+# ------------------------------------------------------------------- batch
+def _touch(path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "wb").close()
+    return path
+
+
+def test_is_batch_input(tmp_path):
+    f = _touch(str(tmp_path / "x.gif"))
+    assert is_batch_input(str(tmp_path))          # directory
+    assert is_batch_input(str(tmp_path / "*.gif"))  # glob
+    assert not is_batch_input(f)                  # plain file
+
+
+def test_iter_inputs_top_level_recursive_and_unsupported(tmp_path):
+    _touch(str(tmp_path / "b.gif"))
+    _touch(str(tmp_path / "a.svg"))
+    _touch(str(tmp_path / "readme.txt"))
+    _touch(str(tmp_path / "sub" / "c.gif"))
+    sup, unsup = iter_inputs(str(tmp_path))
+    assert [os.path.basename(p) for p in sup] == ["a.svg", "b.gif"]  # sorted
+    assert [os.path.basename(p) for p in unsup] == ["readme.txt"]
+    sup, _ = iter_inputs(str(tmp_path), recursive=True)
+    assert {os.path.basename(p) for p in sup} == {"a.svg", "b.gif", "c.gif"}
+
+
+def test_iter_inputs_glob(tmp_path):
+    _touch(str(tmp_path / "a.gif"))
+    _touch(str(tmp_path / "b.png"))
+    sup, unsup = iter_inputs(str(tmp_path / "*.gif"))
+    assert [os.path.basename(p) for p in sup] == ["a.gif"]
+    assert unsup == []
+
+
+def test_convert_many_guard_isolation_and_stop(monkeypatch):
+    calls = []
+
+    def fake_convert(req, settings=None, progress=None):
+        calls.append(req.input_path)
+        if "bad" in req.input_path:
+            raise RuntimeError("boom")
+        return f"ok:{req.input_path}"
+
+    monkeypatch.setattr(service, "convert", fake_convert)
+
+    # --out with many inputs: rejected before any conversion starts
+    with pytest.raises(ValueError, match="--out"):
+        convert_many(["a.gif", "b.gif"], ConvertRequest("x", out="one.gif"))
+    assert calls == []
+
+    # skip (default): the bad file is recorded, the rest still convert
+    rs = convert_many(["a.gif", "bad.gif", "c.gif"], ConvertRequest("x"))
+    assert [b.error is None for b in rs] == [True, False, True]
+    assert "RuntimeError" in rs[1].error and rs[1].path == "bad.gif"
+
+    # stop: aborts at the first failure, naming the file
+    calls.clear()
+    with pytest.raises(ValueError, match="stopped at bad.gif"):
+        convert_many(["a.gif", "bad.gif", "c.gif"], ConvertRequest("x"),
+                     on_error="stop")
+    assert calls == ["a.gif", "bad.gif"]          # c.gif never attempted
+
+    with pytest.raises(ValueError, match="on_error"):
+        convert_many([], ConvertRequest("x"), on_error="explode")

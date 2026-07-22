@@ -14,7 +14,8 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .core.service import FORMATS, ConvertRequest, convert
+from .core.service import (FORMATS, ConvertRequest, convert, convert_many,
+                           is_batch_input, iter_inputs)
 from .presets import PRESETS, PRIORITIES
 
 
@@ -23,7 +24,13 @@ def build_parser() -> argparse.ArgumentParser:
         prog="dcmaker",
         description="Discord emoji + sticker maker: GIF/SVG/PNG in, "
                     "budget-fitted GIF/APNG/PNG out (transparency kept).")
-    p.add_argument("input", help="source file (.gif .svg .png .jpg .webp)")
+    p.add_argument("input", help="source file (.gif .svg .png .jpg .webp), "
+                                 "or a directory / glob for a batch run")
+    p.add_argument("--recursive", action="store_true",
+                   help="batch: also scan subdirectories of a directory input")
+    p.add_argument("--on-error", choices=("stop", "skip"), default="skip",
+                   help="batch: skip = record a failing file and continue "
+                        "(default) | stop = abort on the first failure")
     p.add_argument("--preset", choices=list(PRESETS), default="sticker",
                    help="output route: " + " | ".join(
                        f"{k} = {v.desc}" for k, v in PRESETS.items()))
@@ -61,6 +68,9 @@ def main(argv: list[str] | None = None) -> None:
         duration=args.duration, lossy=args.lossy, quality=args.quality,
         colors=args.colors, dither=args.dither, min_fps=args.min_fps,
         out=args.out, out_dir=args.out_dir)
+    if is_batch_input(args.input):
+        _run_batch(args, req)
+        return
     try:
         r = convert(req, progress=print)
     except ValueError as exc:
@@ -69,6 +79,30 @@ def main(argv: list[str] | None = None) -> None:
           f"artwork={r.artwork_px}px  {r.frames} frames  {r.fps:g}fps  "
           f"{r.size / 1024:.0f}KB")
     print(f"[written] {r.path}  ({r.size} bytes)")
+
+
+def _run_batch(args, req: ConvertRequest) -> None:
+    supported, unsupported = iter_inputs(args.input, args.recursive)
+    if not supported and not unsupported:
+        sys.exit(f"[error] no files found under {args.input!r}")
+    try:
+        results = convert_many(supported, req, on_error=args.on_error,
+                               progress=print)
+    except ValueError as exc:
+        sys.exit(f"[error] {exc}")
+    ok = [b for b in results if b.result]
+    failed = [b for b in results if b.error]
+    print(f"\n[summary] {len(ok)} converted / {len(unsupported)} skipped / "
+          f"{len(failed)} failed")
+    for b in ok:
+        print(f"  [ok]   {b.path} -> {b.result.path} "
+              f"({b.result.size / 1024:.0f}KB)")
+    for path in unsupported:
+        print(f"  [skip] {path} — unsupported type")
+    for b in failed:
+        print(f"  [fail] {b.path} — {b.error}")
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -32,8 +32,8 @@ uv run dcmaker samples/original/hajime_todoroki_02.gif --preset emoji   # 表情
 > 現行 `--priority`(frames / balanced / resolution)管的是「幀數 vs 畫面大小」;
 > 新策略軸管「幀數 vs 色彩」,兩者將可組合。
 
-其他排程中:批次模式(OpenSpec change `add-batch-mode` 已就緒)、海報幀 PNG、
-靜態 WebP。
+其他排程中:海報幀 PNG、靜態 WebP。(批次模式已實作:INPUT 給資料夾或 glob
+即批次轉換,見 CLI 用法。)
 
 ## 特色
 
@@ -94,12 +94,17 @@ dcmaker INPUT [--preset sticker|emoji] [--format auto|gif|apng|webp|png]
               [--lossy N]                # GIF gifsicle lossy 強度
               [--quality N]              # WebP libwebp 品質 0-100(越高越好越大)
               [--colors N --dither D --min-fps F]
+              [--recursive] [--on-error stop|skip]   # 批次(INPUT 為資料夾/glob)
               [--out FILE | --out-dir DIR]
 ```
 
 路由規則:輸入是動畫(GIF / 動畫 SVG)→ 預設 GIF,可選 APNG 或 WebP;輸入是
 靜態(SVG / PNG / JPG / WebP)→ PNG。輸入放 `samples/original/` 時產出自動寫到
 `samples/output/`。
+
+**批次**:INPUT 給資料夾或 glob 就逐檔轉換(每檔各自路由)——預設只掃頂層
+(`--recursive` 進子目錄);單一檔案失敗不會中斷整批(`--on-error stop` 改為
+遇錯即停),結尾印 converted/skipped/failed 摘要,有失敗時以非零碼退出。
 
 範例:
 
@@ -111,6 +116,8 @@ dcmaker x.gif --preset emoji --format webp     # 表情 WebP(真彩+8-bit 透明
 dcmaker x.gif --ss 0 --to 5 --priority resolution   # 裁短 → 又大又順
 dcmaker logo.svg --preset emoji                # 靜態 SVG → 透明 PNG
 dcmaker anim.svg --duration 4                  # 動畫 SVG → GIF
+dcmaker ./pack --preset emoji --out-dir out/   # 批次:整個資料夾一次轉
+dcmaker './pack/**/*.gif' --recursive          # 批次:glob + 子目錄
 ```
 
 ---

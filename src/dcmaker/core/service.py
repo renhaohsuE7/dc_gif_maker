@@ -7,8 +7,9 @@ Routes by input kind x requested format:
 """
 from __future__ import annotations
 
+import glob
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 from ..adapters.browser import capture_svg_frames
@@ -21,7 +22,7 @@ from ..presets import PRESETS, PRIORITIES, Preset
 from .animate import (ApngEncoder, Encoder, GifEncoder, WebpEncoder,
                       compress_animated, make_scratch)
 from .budget import FitResult
-from .detect import detect_kind
+from .detect import RASTER_EXTS, detect_kind
 from .geometry import build_trim, parse_time
 
 FORMATS = ("auto", "gif", "apng", "png", "webp")
@@ -216,3 +217,68 @@ def _result(r: FitResult, fmt: str, kind: str, preset: Preset) -> ConvertResult:
     return ConvertResult(path=r.path, fmt=fmt, kind=kind, preset=preset.name,
                          size=r.size, width=r.width, height=r.height,
                          frames=r.frames, fps=r.fps, artwork_px=r.key)
+
+
+# ------------------------------------------------------------------- batch
+SUPPORTED_EXTS = {".gif", ".svg"} | RASTER_EXTS
+
+
+@dataclass
+class BatchResult:
+    """One file's outcome in a batch run: a ConvertResult or an error string."""
+    path: str
+    result: ConvertResult | None = None
+    error: str | None = None
+
+
+def is_batch_input(spec: str) -> bool:
+    """A directory or a shell glob means 'convert many files'."""
+    return os.path.isdir(spec) or glob.has_magic(spec)
+
+
+def iter_inputs(spec: str, recursive: bool = False) -> tuple[list[str], list[str]]:
+    """Resolve a directory or glob into sorted (supported, unsupported) file
+    lists. A directory scans its top level only unless `recursive`; nothing is
+    silently dropped — unknown file types come back in the second list."""
+    if os.path.isdir(spec):
+        if recursive:
+            files = [os.path.join(root, f)
+                     for root, _, names in os.walk(spec) for f in names]
+        else:
+            files = [e.path for e in os.scandir(spec) if e.is_file()]
+    else:
+        files = [f for f in glob.glob(spec, recursive=recursive)
+                 if os.path.isfile(f)]
+    supported = sorted(f for f in files
+                       if os.path.splitext(f)[1].lower() in SUPPORTED_EXTS)
+    return supported, sorted(set(files) - set(supported))
+
+
+def convert_many(inputs: list[str], req: ConvertRequest,
+                 settings: Settings | None = None, on_error: str = "skip",
+                 progress: Callable[[str], None] = lambda s: None,
+                 ) -> list[BatchResult]:
+    """Run convert() over many inputs with per-file error isolation.
+
+    `req` is the shared option template; its input_path is replaced per file.
+    on_error='skip' records a failing file and continues; 'stop' aborts on the
+    first failure. A single-file --out cannot serve multiple inputs, checked
+    before any work starts."""
+    if on_error not in ("stop", "skip"):
+        raise ValueError("on_error must be 'stop' or 'skip'")
+    if req.out and len(inputs) > 1:
+        raise ValueError(f"--out cannot target multiple inputs "
+                         f"({len(inputs)} files) — use --out-dir")
+    results: list[BatchResult] = []
+    for path in inputs:
+        progress(f"\n[file] {path}")
+        try:
+            r = convert(replace(req, input_path=path), settings, progress)
+            results.append(BatchResult(path, result=r))
+        except Exception as exc:  # noqa: BLE001 — isolate per file by design
+            if on_error == "stop":
+                raise ValueError(f"stopped at {path}: {exc}") from exc
+            msg = (str(exc) if isinstance(exc, ValueError)
+                   else f"{type(exc).__name__}: {exc}")
+            results.append(BatchResult(path, error=msg))
+    return results

@@ -7,6 +7,7 @@ import subprocess
 
 import pytest
 
+from dcmaker.cli import main as cli_main
 from dcmaker.core.budget import byte_ceiling
 from dcmaker.core.service import ConvertRequest, convert
 
@@ -133,3 +134,51 @@ def test_static_input_refuses_gif_format(tmp_path):
     src = os.path.join(SAMPLES, "star_static.svg")
     with pytest.raises(ValueError, match="nothing to animate"):
         convert(ConvertRequest(src, fmt="gif", out=str(tmp_path / "x.gif")))
+
+
+# ------------------------------------------------------------------- batch
+def _make_pack(root, names=("a.gif", "b.gif")):
+    """Directory of tiny generated GIFs for batch tests."""
+    root.mkdir()
+    for name in names:
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+             "-i", "testsrc=size=64x64:rate=8:duration=1", str(root / name)],
+            check=True, capture_output=True)
+    return root
+
+
+@need_ffmpeg
+@need_gifsicle
+def test_batch_directory_skip_isolates_and_exits_nonzero(tmp_path):
+    src = _make_pack(tmp_path / "pack")
+    (src / "corrupt.gif").write_bytes(b"GIF89a definitely not a gif")
+    (src / "readme.txt").write_text("hi")
+    out = tmp_path / "out"
+    with pytest.raises(SystemExit) as e:
+        cli_main([str(src), "--preset", "emoji", "--out-dir", str(out)])
+    assert e.value.code == 1                       # corrupt file failed
+    assert sorted(p.name for p in out.iterdir()) == \
+        ["a-dc_emoji_gif.gif", "b-dc_emoji_gif.gif"]
+
+
+@need_ffmpeg
+@need_gifsicle
+def test_batch_stop_aborts_on_first_failure(tmp_path):
+    src = _make_pack(tmp_path / "pack", names=("z.gif",))
+    (src / "0bad.gif").write_bytes(b"GIF89a junk")   # sorts first
+    out = tmp_path / "out"
+    with pytest.raises(SystemExit) as e:
+        cli_main([str(src), "--preset", "emoji", "--on-error", "stop",
+                  "--out-dir", str(out)])
+    assert "0bad.gif" in str(e.value.code)           # names the culprit
+    assert not out.exists() or not any(out.iterdir())  # z.gif never converted
+
+
+@need_ffmpeg
+@need_gifsicle
+def test_batch_all_ok_returns_cleanly(tmp_path):
+    src = _make_pack(tmp_path / "pack")
+    out = tmp_path / "out"
+    cli_main([str(src), "--preset", "emoji", "--out-dir", str(out)])  # no exit
+    assert len(list(out.iterdir())) == 2

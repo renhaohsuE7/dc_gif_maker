@@ -13,9 +13,15 @@ venv/
 # env / secrets
 .env
 
-# reference clones are local-only (keep the README)
+# reference clones & web-research notes are local-only (folders kept via .gitkeep)
 docs/references/external_repos/*
-!docs/references/external_repos/README.md
+!docs/references/external_repos/.gitkeep
+docs/references/external_sites/*
+!docs/references/external_sites/.gitkeep
+
+# machine-local docs (project ancestry, handoffs — see docs/local/README.md locally)
+docs/local/*
+!docs/local/.gitkeep
 
 # generated artefacts (originals/fixtures stay tracked)
 samples/output/

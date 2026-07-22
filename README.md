@@ -3,7 +3,7 @@
 把 **GIF / SVG / PNG** 變成符合 Discord 規格的**貼圖**(正好 320×320、≤512KB)
 或**表情符號**(128×128、<256KB),透明背景全程保留。
 
-- **GIF 路線**:承襲 [gif_compressor](docs/references/external_repos/README.md) 的
+- **GIF 路線**:承襲前身專案 gif_compressor 的
   「ffmpeg 最佳化調色盤 + gifsicle lossy + 大小預算搜尋」管線。
 - **SVG 靜態路線**:向量 → 透明 PNG,天生遠低於預算、畫質最佳。
 - **SVG 動畫路線(crazy 的部分)**:headless Chromium 載入 SVG,把 SMIL 與

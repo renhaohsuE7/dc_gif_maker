@@ -16,21 +16,24 @@ uv run dcmaker samples/original/hajime_todoroki_02.gif                  # 貼圖
 uv run dcmaker samples/original/hajime_todoroki_02.gif --preset emoji   # 表情:128×128、<256KB
 ```
 
-## 未來目標
+## 一句指令、雙產出 + 瘦身策略
 
-**一句指令、雙產出**:`dcmaker x.gif --preset all`(規劃中)—— 一次同時產出
-兩種 Discord 素材:**512KB 貼圖**(320×320)與 **256KB 表情**(128×128)。
+**`--preset all`** 一次同時產出兩種 Discord 素材:**512KB 貼圖**(320×320)與
+**256KB 表情**(128×128);動畫 SVG 只做一次 Chromium 截圖、兩條路線共用。
 
-搭配**三種瘦身策略**(規劃中,`--strategy`),決定「靠什麼」把體積壓進預算:
+**`--strategy`** 決定 GIF 路線「靠什麼」把體積壓進預算:
 
-| 策略 | 作法 | 現況 |
+| 策略 | 作法 | 狀態 |
 |------|------|------|
-| **均衡 balanced** | 抽幀 + 減色並用 —— 前身 gif_compressor 時期實測**肉眼效果最好**的方向 | 需系統性實驗驗證哪個 fps×色數組合最佳 |
-| **抽幀 frames** | 主要靠降 fps 塞進 512KB / 256KB;解析度與色彩盡量保留 | 近似現行預設(fps 預算搜尋 + 256 色),可由既有經驗直接推 |
-| **色彩減少 colors** | 主要靠縮調色盤(256 → 128 → 64 → …);幀數與解析度盡量保留 | `--colors` 旗標已有,缺的是把色數納入自動預算搜尋 |
+| **抽幀 frames**(預設) | 主要靠降 fps;解析度與色彩(256 色)盡量保留 | ✅ 已實作 |
+| **色彩減少 colors** | 保住源幀率,走色階梯 256→192→128→96→64→48→32;梯底仍不行才降 fps | ✅ 已實作(實測 hajime 貼圖:123 幀/256 色 → **190 幀**/32 色) |
+| **均衡 balanced** | 抽幀 + 減色並用 —— 前身 gif_compressor 實測肉眼效果最好的方向 | 🧪 實驗中:`scripts/strategy_matrix.py` 產出對照表,由肉眼排名決定組合後升為預設 |
 
-> 現行 `--priority`(frames / balanced / resolution)管的是「幀數 vs 畫面大小」;
-> 新策略軸管「幀數 vs 色彩」,兩者將可組合。
+> `--priority`(frames / balanced / resolution)管「幀數 vs 畫面大小」;
+> `--strategy` 管「幀數 vs 色彩」,兩軸可組合。`--colors N` 可釘死色數
+> (策略階梯不會動它)。
+
+## 未來目標
 
 其他排程中:海報幀 PNG、靜態 WebP。(批次模式已實作:INPUT 給資料夾或 glob
 即批次轉換,見 CLI 用法。)
@@ -87,7 +90,8 @@ uv run dcmaker samples/original/star_spin.svg
 ## CLI 用法
 
 ```bash
-dcmaker INPUT [--preset sticker|emoji] [--format auto|gif|apng|webp|png]
+dcmaker INPUT [--preset sticker|emoji|all] [--format auto|gif|apng|webp|png]
+              [--strategy frames|colors|balanced]  # GIF 瘦身策略(見上表)
               [--priority frames|balanced|resolution]
               [--ss T --to T]            # 裁短(體積最大的槓桿)
               [--duration N]             # 動畫 SVG:截取秒數(預設自動偵測)
@@ -111,6 +115,8 @@ dcmaker INPUT [--preset sticker|emoji] [--format auto|gif|apng|webp|png]
 ```bash
 dcmaker x.gif                                  # 貼圖 GIF(320×320 ≤512KB)
 dcmaker x.gif --preset emoji                   # 表情 GIF(128×128 <256KB)
+dcmaker x.gif --preset all                     # 一句指令、貼圖+表情雙產出
+dcmaker x.gif --strategy colors                # 保幀率,靠減色塞進預算
 dcmaker x.gif --format apng                    # 貼圖 APNG(8-bit alpha)
 dcmaker x.gif --preset emoji --format webp     # 表情 WebP(真彩+8-bit 透明)
 dcmaker x.gif --ss 0 --to 5 --priority resolution   # 裁短 → 又大又順

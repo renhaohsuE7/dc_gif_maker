@@ -127,3 +127,9 @@ a.dl {
 #error { color: var(--err); margin-top: 1rem; display: flex; gap: .5rem; }
 .hide { display: none; }
 footer { margin-top: 2rem; color: var(--ink-soft); font-size: .8rem; }
+
+/* dual-output (preset=all): stack result cards inside #result */
+.result-item + .result-item {
+  margin-top: 1.4rem; padding-top: 1.4rem;
+  border-top: 1px solid var(--check-a);
+}

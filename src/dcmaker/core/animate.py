@@ -15,7 +15,7 @@ from ..adapters.ffmpeg import FFmpeg, InputSpec
 from ..adapters.gifsicle import Gifsicle
 from ..adapters.tools import ToolError
 from ..presets import Preset
-from .budget import FitResult, byte_ceiling, choose, fit_fps
+from .budget import FitResult, byte_ceiling, choose, fit_strategy
 from .geometry import content_sizes, geom_square
 
 ProgressCb = Callable[[str], None]
@@ -111,34 +111,48 @@ def webp_info(path: str) -> tuple[int, int, int]:
     return w, h, frames
 
 
-def compress_animated(enc: Encoder, src: InputSpec, trim: str,
-                      preset: Preset, priority: str, min_fps: float,
+def compress_animated(make_enc: Callable[[int], Encoder], src: InputSpec,
+                      trim: str, preset: Preset, priority: str, min_fps: float,
                       out: str, tmp: str,
-                      progress: ProgressCb = lambda s: None) -> FitResult:
-    """Run the candidate x fps budget search and write the picked file to
-    `out`. `tmp` is a caller-owned scratch dir (the encoder shares it)."""
+                      progress: ProgressCb = lambda s: None,
+                      rungs: tuple[int, ...] = (256,),
+                      pin_fps: bool = False) -> FitResult:
+    """Run the candidate x (fps, colours) budget search and write the picked
+    file to `out`. `make_enc` maps a palette size to an Encoder — palette-less
+    formats (APNG/WebP) just ignore the argument. `rungs`/`pin_fps` come from
+    the slimming strategy (default = today's fps-first behaviour). `tmp` is a
+    caller-owned scratch dir (the encoders share it)."""
     target = byte_ceiling(preset.target_kb)
     results: list[FitResult] = []
+    encoders: dict[int, Encoder] = {}
 
+    def enc_at(colors: int) -> Encoder:
+        if colors not in encoders:
+            encoders[colors] = make_enc(colors)
+        return encoders[colors]
+
+    ext = enc_at(rungs[0]).ext
     for content in content_sizes(preset.canvas, preset.content_fracs):
         label = f"{content}in{preset.canvas}"
         geom = geom_square(preset.canvas, content)
-        trial = os.path.join(tmp, f"trial_{label}.{enc.ext}")
+        trial = os.path.join(tmp, f"trial_{label}.{ext}")
 
-        def encode_at(fps: float, _geom=geom, _trial=trial) -> int:
-            return enc.encode(f"{trim}fps={fps:.4f},{_geom}", _trial)
+        def encode_at(fps: float, colors: int, _geom=geom, _trial=trial) -> int:
+            return enc_at(colors).encode(f"{trim}fps={fps:.4f},{_geom}", _trial)
 
-        best = fit_fps(encode_at, src.fps, min_fps, target)
+        best = fit_strategy(encode_at, src.fps, min_fps, target, rungs, pin_fps)
         if best is None:
             progress(f"  {label:>9}  (cannot fit even at {min_fps:g}fps)")
             continue
-        final = os.path.join(tmp, f"best_{label}.{enc.ext}")
-        enc.encode(f"{trim}fps={best[0]:.4f},{geom}", final)
-        w, h, frames = enc.measure(final)
-        r = FitResult(label, w, h, round(best[0], 2), frames,
-                      os.path.getsize(final), final, content)
-        progress(f"  {label:>9}  out={w}x{h} art={content:<4} fps={r.fps:<6g} "
-                 f"frames={r.frames:<4} {r.size / 1024:.0f}KB")
+        fps_pick, colors_pick, _ = best
+        final = os.path.join(tmp, f"best_{label}.{ext}")
+        enc_at(colors_pick).encode(f"{trim}fps={fps_pick:.4f},{geom}", final)
+        w, h, frames = enc_at(colors_pick).measure(final)
+        r = FitResult(label, w, h, round(fps_pick, 2), frames,
+                      os.path.getsize(final), final, content, colors_pick)
+        progress(f"  {label:>9}  out={w}x{h} art={content:<4} "
+                 f"fps={r.fps:<6g} frames={r.frames:<4} "
+                 f"colors={colors_pick:<3} {r.size / 1024:.0f}KB")
         results.append(r)
 
     if not results:

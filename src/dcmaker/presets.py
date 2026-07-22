@@ -41,3 +41,38 @@ EMOJI = Preset(
 )
 
 PRESETS: dict[str, Preset] = {p.name: p for p in (STICKER, EMOJI)}
+
+
+# ----------------------------------------------------------------- strategies
+@dataclass(frozen=True)
+class Strategy:
+    """How the GIF route reaches the byte budget — which lever gives first.
+    `rungs` are the palette sizes tried in order; `pin_fps` holds the source
+    fps while walking the rungs, so frames only drop once the ladder is
+    exhausted."""
+    name: str
+    desc: str
+    rungs: tuple[int, ...]
+    pin_fps: bool
+
+
+FRAMES = Strategy(
+    name="frames",
+    desc="keep 256 colours, fit by lowering fps",
+    rungs=(256,), pin_fps=False)
+
+COLORS = Strategy(
+    name="colors",
+    desc="keep the source fps, fit by shrinking the palette",
+    rungs=(256, 192, 128, 96, 64, 48, 32), pin_fps=True)
+
+BALANCED = Strategy(
+    name="balanced",
+    desc="frames + colours blend — PROVISIONAL until the strategy-matrix "
+         "experiment (openspec change add-dual-output-strategies) ranks the "
+         "combinations by eye and picks the winner",
+    rungs=(128,), pin_fps=False)
+
+STRATEGIES: dict[str, Strategy] = {s.name: s
+                                   for s in (BALANCED, FRAMES, COLORS)}
+DEFAULT_STRATEGY = "frames"   # switches to "balanced" once validated

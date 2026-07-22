@@ -6,12 +6,15 @@ import pytest
 
 import dcmaker.core.service as service
 from dcmaker.core.animate import webp_info
-from dcmaker.core.budget import FitResult, byte_ceiling, choose, fit_fps
+from dcmaker.core.budget import (FitResult, byte_ceiling, choose, fit_fps,
+                                 fit_strategy)
 from dcmaker.core.detect import detect_kind
 from dcmaker.core.geometry import (build_trim, content_sizes, geom_square,
                                    parse_time)
-from dcmaker.core.service import (ConvertRequest, convert_many, derive_out,
-                                  is_batch_input, iter_inputs, resolve_format)
+from dcmaker.core.service import (ConvertRequest, convert, convert_all,
+                                  convert_many, derive_out, is_batch_input,
+                                  iter_inputs, resolve_format)
+from dcmaker.presets import DEFAULT_STRATEGY, STRATEGIES
 
 
 # ------------------------------------------------------------------ budget
@@ -54,6 +57,71 @@ def test_fit_fps_finds_highest_fitting_fps():
 
 def test_fit_fps_returns_none_when_nothing_fits():
     assert fit_fps(lambda f: 10_000_000, 10.0, 2.0, 500_000) is None
+
+
+# --------------------------------------------------------------- strategies
+def test_fit_strategy_colors_first_keeps_src_fps():
+    # size model: fps x colours bytes -> 96 is the first rung that fits
+    calls = []
+
+    def enc(fps, colors):
+        calls.append((fps, colors))
+        return int(fps * colors)
+
+    got = fit_strategy(enc, 10.0, 1.0, 960, (256, 192, 128, 96, 64), True)
+    assert got == (10.0, 96, 960)                 # source fps preserved
+    assert calls == [(10.0, 256), (10.0, 192), (10.0, 128), (10.0, 96)]
+
+
+def test_fit_strategy_fps_falls_back_after_ladder():
+    # even the smallest rung misses at full fps -> fps search at that rung
+    got = fit_strategy(lambda f, c: int(f * c * 10), 10.0, 1.0, 1000,
+                       (64, 32), True)
+    assert got is not None
+    fps, colors, size = got
+    assert colors == 32 and fps < 10.0 and size <= 1000
+
+
+def test_fit_strategy_single_rung_is_fps_search():
+    # frames/balanced shape: one rung, proportional fps search at it
+    got = fit_strategy(lambda f, c: int(f * 100), 10.0, 1.0, 500, (256,), False)
+    assert got is not None
+    fps, colors, size = got
+    assert colors == 256 and size <= 500
+
+
+def test_strategies_table():
+    assert DEFAULT_STRATEGY in STRATEGIES
+    assert STRATEGIES["frames"].rungs == (256,)
+    ladder = STRATEGIES["colors"].rungs
+    assert ladder[0] == 256 and list(ladder) == sorted(ladder, reverse=True)
+    assert STRATEGIES["colors"].pin_fps and not STRATEGIES["frames"].pin_fps
+
+
+def test_strategy_rejected_off_gif_route(tmp_path):
+    gif = tmp_path / "x.gif"
+    gif.write_bytes(b"GIF89a")
+    with pytest.raises(ValueError, match="GIF route"):
+        convert(ConvertRequest(str(gif), fmt="webp", strategy="colors"))
+    with pytest.raises(ValueError, match="strategy must be one of"):
+        convert(ConvertRequest(str(gif), strategy="yolo"))
+
+
+def test_convert_all_rejects_out_and_runs_every_preset(tmp_path, monkeypatch):
+    gif = tmp_path / "x.gif"
+    gif.write_bytes(b"GIF89a")
+    with pytest.raises(ValueError, match="--out"):
+        convert_all(ConvertRequest(str(gif), out="one.gif"))
+
+    seen = []
+
+    def fake_convert(req, settings=None, progress=None, _shared=None):
+        seen.append(req.preset)
+        return f"ok:{req.preset}"
+
+    monkeypatch.setattr(service, "convert", fake_convert)
+    rs = convert_all(ConvertRequest(str(gif)))
+    assert seen == ["sticker", "emoji"] and len(rs) == 2
 
 
 # -------------------------------------------------------------------- webp

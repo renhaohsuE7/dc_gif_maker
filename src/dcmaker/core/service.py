@@ -13,12 +13,13 @@ from dataclasses import dataclass, field, replace
 from typing import Callable
 
 from ..adapters.browser import capture_svg_frames
-from ..adapters.ffmpeg import FFmpeg
+from ..adapters.ffmpeg import FFmpeg, InputSpec
 from ..adapters.gifsicle import Gifsicle
 from ..adapters.pngtools import PngQuant
 from ..adapters.svgrender import SvgRenderer
 from ..config import Settings, load_settings
-from ..presets import PRESETS, PRIORITIES, Preset
+from ..presets import (DEFAULT_STRATEGY, PRESETS, PRIORITIES, STRATEGIES,
+                       Preset)
 from .animate import (ApngEncoder, Encoder, GifEncoder, WebpEncoder,
                       compress_animated, make_scratch)
 from .budget import FitResult
@@ -42,7 +43,8 @@ class ConvertRequest:
     duration: float | None = None    # animated SVG: capture length (auto)
     lossy: int | None = None         # GIF route only; default: preset's
     quality: int | None = None       # WebP route only; default: preset's
-    colors: int = 256
+    strategy: str | None = None      # GIF slimming strategy; default: frames
+    colors: int | None = None        # pin the palette (ladders won't move it)
     dither: str = "none"
     min_fps: float | None = None
     out: str | None = None
@@ -61,6 +63,7 @@ class ConvertResult:
     frames: int
     fps: float
     artwork_px: int
+    colors: int = 256                # palette actually used (GIF route)
     notes: list[str] = field(default_factory=list)
 
 
@@ -96,18 +99,26 @@ def derive_out(input_path: str, suffix: str, ext: str,
 
 
 def convert(req: ConvertRequest, settings: Settings | None = None,
-            progress: Callable[[str], None] = lambda s: None) -> ConvertResult:
+            progress: Callable[[str], None] = lambda s: None,
+            _shared: InputSpec | None = None) -> ConvertResult:
     settings = settings or load_settings()
     if not os.path.isfile(req.input_path):
         raise ValueError(f"input not found: {req.input_path}")
     preset = PRESETS.get(req.preset)
     if preset is None:
-        raise ValueError(f"preset must be one of {tuple(PRESETS)}")
+        raise ValueError(f"preset must be one of {tuple(PRESETS)} — or 'all' "
+                         "via convert_all")
     if req.priority is not None and req.priority not in PRIORITIES:
         raise ValueError(f"priority must be one of {PRIORITIES}")
 
     kind = detect_kind(req.input_path)
     fmt = resolve_format(kind, req.fmt)
+    if req.strategy is not None:
+        if req.strategy not in STRATEGIES:
+            raise ValueError(f"strategy must be one of {tuple(STRATEGIES)}")
+        if fmt != "gif":
+            raise ValueError("--strategy applies to the GIF route only "
+                             "(apng/webp have no palette axis)")
     ext = _EXT[fmt]
     out = derive_out(req.input_path, f"dc_{preset.name}_{fmt}", ext,
                      req.out, req.out_dir)
@@ -118,7 +129,8 @@ def convert(req: ConvertRequest, settings: Settings | None = None,
 
     if fmt == "png":
         return _static(req, settings, preset, ff, kind, out)
-    return _animated(req, settings, preset, ff, kind, fmt, out, progress)
+    return _animated(req, settings, preset, ff, kind, fmt, out, progress,
+                     shared=_shared)
 
 
 def _static(req: ConvertRequest, settings: Settings, preset: Preset,
@@ -134,7 +146,8 @@ def _static(req: ConvertRequest, settings: Settings, preset: Preset,
 
 def _animated(req: ConvertRequest, settings: Settings, preset: Preset,
               ff: FFmpeg, kind: str, fmt: str, out: str,
-              progress: Callable[[str], None]) -> ConvertResult:
+              progress: Callable[[str], None],
+              shared: InputSpec | None = None) -> ConvertResult:
     ss = parse_time(req.ss) if req.ss is not None else None
     to = parse_time(req.to) if req.to is not None else None
     if ss is not None and ss < 0:
@@ -147,10 +160,18 @@ def _animated(req: ConvertRequest, settings: Settings, preset: Preset,
     priority = req.priority or preset.priority
     lossy = req.lossy if req.lossy is not None else preset.lossy
     quality = req.quality if req.quality is not None else preset.webp_quality
+    # slimming strategy (GIF route): which (fps, colours) ladder to walk;
+    # a user-pinned --colors freezes the palette dimension entirely
+    strat = STRATEGIES[req.strategy or DEFAULT_STRATEGY]
+    rungs, pin_fps = strat.rungs, strat.pin_fps
+    if req.colors is not None:
+        rungs, pin_fps = (req.colors,), False
     notes: list[str] = []
 
     with make_scratch() as tmp:
-        if kind == "svg-animated":
+        if shared is not None:
+            src = shared        # pre-captured by convert_all, reused as-is
+        elif kind == "svg-animated":
             # capture once at 2x canvas; the fps filter downsamples per trial
             cap = capture_svg_frames(
                 req.input_path, os.path.join(tmp, "frames"),
@@ -186,19 +207,21 @@ def _animated(req: ConvertRequest, settings: Settings, preset: Preset,
             knob = ""
             steps = [None]
 
-        def make_encoder(step: int | None) -> Encoder:
+        def make_encoder(step: int | None) -> Callable[[int], Encoder]:
+            """colours -> Encoder factory; palette-less formats ignore it."""
             if fmt == "gif":
-                return GifEncoder(ff, Gifsicle(settings.gifsicle), src, tmp,
-                                  req.colors, req.dither, step)
+                return lambda colors: GifEncoder(
+                    ff, Gifsicle(settings.gifsicle), src, tmp,
+                    colors, req.dither, step)
             if fmt == "webp":
-                return WebpEncoder(ff, src, tmp, step)
-            return ApngEncoder(ff, src, tmp)
+                return lambda _colors: WebpEncoder(ff, src, tmp, step)
+            return lambda _colors: ApngEncoder(ff, src, tmp)
 
         for i, step in enumerate(steps):
             try:
                 r = compress_animated(make_encoder(step), src, trim,
                                       preset, priority, min_fps, out, tmp,
-                                      progress)
+                                      progress, rungs=rungs, pin_fps=pin_fps)
                 if i:
                     verb = "raised" if fmt == "gif" else "lowered"
                     notes.append(f"{knob} {verb} to {step} to fit budget")
@@ -216,7 +239,47 @@ def _animated(req: ConvertRequest, settings: Settings, preset: Preset,
 def _result(r: FitResult, fmt: str, kind: str, preset: Preset) -> ConvertResult:
     return ConvertResult(path=r.path, fmt=fmt, kind=kind, preset=preset.name,
                          size=r.size, width=r.width, height=r.height,
-                         frames=r.frames, fps=r.fps, artwork_px=r.key)
+                         frames=r.frames, fps=r.fps, artwork_px=r.key,
+                         colors=r.colors)
+
+
+# -------------------------------------------------------------- dual output
+def convert_all(req: ConvertRequest, settings: Settings | None = None,
+                progress: Callable[[str], None] = lambda s: None,
+                ) -> list[ConvertResult]:
+    """一句指令、雙產出: run every preset (sticker + emoji) for one input.
+    An animated-SVG source is captured once, at the largest canvas any preset
+    needs, and the frames are shared — one Chromium run instead of two."""
+    settings = settings or load_settings()
+    if req.out:
+        raise ValueError("--out cannot target multiple outputs (preset=all) "
+                         "— use --out-dir")
+    if not os.path.isfile(req.input_path):
+        raise ValueError(f"input not found: {req.input_path}")
+    kind = detect_kind(req.input_path)
+    resolve_format(kind, req.fmt)      # fail fast before any capture work
+
+    results: list[ConvertResult] = []
+    with make_scratch() as tmp:
+        shared = note = None
+        if kind == "svg-animated":
+            box = 2 * max(p.canvas for p in PRESETS.values())
+            cap = capture_svg_frames(
+                req.input_path, os.path.join(tmp, "frames"), box=box,
+                fps=settings.capture_fps, duration=req.duration,
+                default_duration=settings.default_duration,
+                max_seconds=settings.capture_max_seconds)
+            ff = FFmpeg(settings.ffmpeg, settings.ffprobe)
+            shared = ff.frames_input(cap.frames_dir, cap.fps)
+            note = (f"captured {cap.frames} frames @ {cap.fps:g}fps "
+                    f"({cap.duration:g}s) at {box}px, shared by all presets")
+            progress(f"[capture] {note}")
+        for name in PRESETS:
+            results.append(convert(replace(req, preset=name), settings,
+                                   progress, _shared=shared))
+    if note:
+        results[0].notes.insert(0, note)
+    return results
 
 
 # ------------------------------------------------------------------- batch
@@ -225,9 +288,10 @@ SUPPORTED_EXTS = {".gif", ".svg"} | RASTER_EXTS
 
 @dataclass
 class BatchResult:
-    """One file's outcome in a batch run: a ConvertResult or an error string."""
+    """One file's outcome in a batch run: its ConvertResults (one per preset;
+    two under preset=all) or an error string."""
     path: str
-    result: ConvertResult | None = None
+    results: list[ConvertResult] = field(default_factory=list)
     error: str | None = None
 
 
@@ -272,9 +336,12 @@ def convert_many(inputs: list[str], req: ConvertRequest,
     results: list[BatchResult] = []
     for path in inputs:
         progress(f"\n[file] {path}")
+        req_f = replace(req, input_path=path)
         try:
-            r = convert(replace(req, input_path=path), settings, progress)
-            results.append(BatchResult(path, result=r))
+            outs = (convert_all(req_f, settings, progress)
+                    if req.preset == "all"
+                    else [convert(req_f, settings, progress)])
+            results.append(BatchResult(path, results=outs))
         except Exception as exc:  # noqa: BLE001 — isolate per file by design
             if on_error == "stop":
                 raise ValueError(f"stopped at {path}: {exc}") from exc

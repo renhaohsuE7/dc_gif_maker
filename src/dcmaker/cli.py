@@ -14,9 +14,10 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .core.service import (FORMATS, ConvertRequest, convert, convert_many,
-                           is_batch_input, iter_inputs)
-from .presets import PRESETS, PRIORITIES
+from .core.service import (FORMATS, ConvertRequest, ConvertResult, convert,
+                           convert_all, convert_many, is_batch_input,
+                           iter_inputs)
+from .presets import PRESETS, PRIORITIES, STRATEGIES
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,9 +32,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--on-error", choices=("stop", "skip"), default="skip",
                    help="batch: skip = record a failing file and continue "
                         "(default) | stop = abort on the first failure")
-    p.add_argument("--preset", choices=list(PRESETS), default="sticker",
+    p.add_argument("--preset", choices=[*PRESETS, "all"], default="sticker",
                    help="output route: " + " | ".join(
-                       f"{k} = {v.desc}" for k, v in PRESETS.items()))
+                       f"{k} = {v.desc}" for k, v in PRESETS.items())
+                   + " | all = both from one run (一句指令、雙產出)")
+    p.add_argument("--strategy", choices=list(STRATEGIES), default=None,
+                   help="GIF slimming lever: " + " | ".join(
+                       f"{k} = {v.desc}" for k, v in STRATEGIES.items()))
     p.add_argument("--format", dest="fmt", choices=list(FORMATS),
                    default="auto",
                    help="auto = gif for animated inputs, png for static; "
@@ -52,7 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--quality", type=int, default=None,
                    help="WebP libwebp quality 0-100, higher = better/bigger "
                         "(default: preset's)")
-    p.add_argument("--colors", type=int, default=256)
+    p.add_argument("--colors", type=int, default=None,
+                   help="pin the GIF palette size (strategy ladders won't "
+                        "move a pinned value)")
     p.add_argument("--dither", default="none")
     p.add_argument("--min-fps", type=float, default=None)
     p.add_argument("--out", help="explicit output file path")
@@ -66,18 +73,24 @@ def main(argv: list[str] | None = None) -> None:
         input_path=args.input, preset=args.preset, fmt=args.fmt,
         priority=args.priority, ss=args.ss, to=args.to,
         duration=args.duration, lossy=args.lossy, quality=args.quality,
-        colors=args.colors, dither=args.dither, min_fps=args.min_fps,
-        out=args.out, out_dir=args.out_dir)
+        strategy=args.strategy, colors=args.colors, dither=args.dither,
+        min_fps=args.min_fps, out=args.out, out_dir=args.out_dir)
     if is_batch_input(args.input):
         _run_batch(args, req)
         return
     try:
-        r = convert(req, progress=print)
+        rs = (convert_all(req, progress=print) if args.preset == "all"
+              else [convert(req, progress=print)])
     except ValueError as exc:
         sys.exit(f"[error] {exc}")
+    for r in rs:
+        _print_one(r)
+
+
+def _print_one(r: ConvertResult) -> None:
     print(f"\n[picked] {r.preset}/{r.fmt}: {r.width}x{r.height} "
           f"artwork={r.artwork_px}px  {r.frames} frames  {r.fps:g}fps  "
-          f"{r.size / 1024:.0f}KB")
+          f"colors={r.colors}  {r.size / 1024:.0f}KB")
     print(f"[written] {r.path}  ({r.size} bytes)")
 
 
@@ -90,13 +103,13 @@ def _run_batch(args, req: ConvertRequest) -> None:
                                progress=print)
     except ValueError as exc:
         sys.exit(f"[error] {exc}")
-    ok = [b for b in results if b.result]
+    ok = [b for b in results if b.results]
     failed = [b for b in results if b.error]
     print(f"\n[summary] {len(ok)} converted / {len(unsupported)} skipped / "
           f"{len(failed)} failed")
     for b in ok:
-        print(f"  [ok]   {b.path} -> {b.result.path} "
-              f"({b.result.size / 1024:.0f}KB)")
+        for r in b.results:
+            print(f"  [ok]   {b.path} -> {r.path} ({r.size / 1024:.0f}KB)")
     for path in unsupported:
         print(f"  [skip] {path} — unsupported type")
     for b in failed:

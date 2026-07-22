@@ -23,7 +23,8 @@ class FitResult:
     frames: int
     size: int
     path: str
-    key: int = 0   # effective artwork/content resolution (priority selection)
+    key: int = 0      # effective artwork/content resolution (priority selection)
+    colors: int = 256  # palette actually used (GIF route)
 
 
 def fit_fps(encode: Callable[[float], int], src_fps: float, min_fps: float,
@@ -51,6 +52,28 @@ def fit_fps(encode: Callable[[float], int], src_fps: float, min_fps: float,
             if fps <= min_fps and size > target:
                 break
     return best
+
+
+def fit_strategy(encode: Callable[[float, int], int], src_fps: float,
+                 min_fps: float, target: int, rungs: tuple[int, ...],
+                 pin_fps: bool) -> tuple[float, int, int] | None:
+    """Strategy-aware fit over (fps, colours); encode(fps, colors) -> bytes.
+
+    pin_fps (the 'colors' strategy): walk the palette rungs at the source fps
+    and take the first that fits — colours give way before frames do; only
+    when the smallest rung still misses does fps start dropping, at that
+    smallest palette. Otherwise a single-rung plan: the usual fps search at
+    rungs[0]. Returns (fps, colors, size) or None when nothing fits."""
+    if pin_fps:
+        for colors in rungs:
+            size = encode(src_fps, colors)
+            if size <= target:
+                return (src_fps, colors, size)
+        colors = rungs[-1]
+    else:
+        colors = rungs[0]
+    best = fit_fps(lambda f: encode(f, colors), src_fps, min_fps, target)
+    return (best[0], colors, best[1]) if best else None
 
 
 def choose(results: list[FitResult], priority: str) -> FitResult:

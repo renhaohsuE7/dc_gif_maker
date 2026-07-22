@@ -9,7 +9,7 @@ import pytest
 
 from dcmaker.cli import main as cli_main
 from dcmaker.core.budget import byte_ceiling
-from dcmaker.core.service import ConvertRequest, convert
+from dcmaker.core.service import ConvertRequest, convert, convert_all
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SAMPLES = os.path.join(os.path.dirname(HERE), "samples", "original")
@@ -134,6 +134,56 @@ def test_static_input_refuses_gif_format(tmp_path):
     src = os.path.join(SAMPLES, "star_static.svg")
     with pytest.raises(ValueError, match="nothing to animate"):
         convert(ConvertRequest(src, fmt="gif", out=str(tmp_path / "x.gif")))
+
+
+# ------------------------------------------------- dual output & strategies
+@need_ffmpeg
+@need_gifsicle
+def test_preset_all_dual_output(anim_gif, tmp_path):
+    rs = convert_all(ConvertRequest(anim_gif, preset="all", fmt="gif",
+                                    out_dir=str(tmp_path)))
+    assert [r.preset for r in rs] == ["sticker", "emoji"]
+    assert (rs[0].width, rs[0].height) == (320, 320)
+    assert (rs[1].width, rs[1].height) == (128, 128)
+    assert rs[0].size <= byte_ceiling(512)
+    assert rs[1].size <= byte_ceiling(256)
+    assert all(os.path.isfile(r.path) for r in rs)
+
+
+@need_ffmpeg
+@need_gifsicle
+@pytest.mark.skipif(not _has_chromium(), reason="chromium not installed")
+def test_preset_all_svg_captures_once(tmp_path):
+    src = os.path.join(SAMPLES, "star_spin.svg")
+    rs = convert_all(ConvertRequest(src, preset="all", out_dir=str(tmp_path)))
+    caps = [n for r in rs for n in r.notes if "captured" in n]
+    assert len(caps) == 1 and "shared" in caps[0]   # one Chromium run
+    assert len(rs) == 2
+
+
+@need_ffmpeg
+@need_gifsicle
+def test_strategy_colors_preserves_everything_when_it_fits(anim_gif, tmp_path):
+    # tiny source already fits at 256 colours and full fps -> keep both
+    out = str(tmp_path / "e.gif")
+    r = convert(ConvertRequest(anim_gif, preset="emoji", strategy="colors",
+                               out=out))
+    assert r.colors == 256
+    assert r.fps == pytest.approx(8.0, abs=0.01)    # source fps preserved
+    assert r.frames >= 6
+
+
+@need_ffmpeg
+@need_gifsicle
+def test_strategy_colors_reduces_palette_on_real_fixture(tmp_path):
+    # hajime cannot fit the emoji budget at 256 colours + full fps, so the
+    # colours ladder must give first (slow-ish: several full-fps encodes)
+    src = os.path.join(SAMPLES, "hajime_todoroki_02.gif")
+    out = str(tmp_path / "h.gif")
+    r = convert(ConvertRequest(src, preset="emoji", strategy="colors",
+                               out=out))
+    assert r.colors < 256                            # palette gave way
+    assert r.size <= byte_ceiling(256)
 
 
 # ------------------------------------------------------------------- batch

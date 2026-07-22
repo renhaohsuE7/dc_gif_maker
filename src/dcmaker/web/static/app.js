@@ -64,7 +64,7 @@ form.addEventListener("submit", async e => {
     const resp = await fetch("/api/convert", { method: "POST", body: fd });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || resp.statusText);
-    render(data);
+    render(data.results);
   } catch (err) {
     showError(err.message);
   } finally {
@@ -74,25 +74,39 @@ form.addEventListener("submit", async e => {
   }
 });
 
-function render(d) {
-  const img = result.querySelector("img");
-  img.src = d.file;
-  img.width = d.width;
-  const kb = d.size / 1024, budget = d.budget_kb;
-  const bar = result.querySelector(".budget > div");
-  bar.style.width = Math.min(100, (kb / budget) * 100) + "%";
-  bar.classList.toggle("over", kb > budget);
-  const rows = [
-    ["格式", d.format.toUpperCase()],
-    ["尺寸", `${d.width}×${d.height}`],
-    ["大小", `${kb.toFixed(0)} KB / ${budget} KB`],
-  ];
-  if (d.frames > 1) rows.push(["幀數", d.frames], ["幀率", `${d.fps} fps`],
-                              ["內容", `${d.artwork_px}px`]);
-  result.querySelector(".meta").innerHTML = rows
-    .map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
-  const a = result.querySelector("a.dl");
-  a.href = d.file;
-  a.download = d.filename;
+function render(list) {
+  result.innerHTML = "";
+  for (const d of list) {
+    const item = document.createElement("div");
+    item.className = "result-item";
+    const kb = d.size / 1024, budget = d.budget_kb;
+    const rows = [
+      ["路線", d.preset === "sticker" ? "貼圖" : "表情"],
+      ["格式", d.format.toUpperCase()],
+      ["尺寸", `${d.width}×${d.height}`],
+      ["大小", `${kb.toFixed(0)} KB / ${budget} KB`],
+    ];
+    if (d.frames > 1) rows.push(["幀數", d.frames], ["幀率", `${d.fps} fps`],
+                                ["內容", `${d.artwork_px}px`],
+                                ["色數", d.colors]);
+    item.innerHTML = `
+      <img alt="轉換結果預覽">
+      <div class="budget"><div></div></div>
+      <div class="meta"></div>
+      <a class="dl" download><span data-icon="download" class="icon"></span>下載</a>`;
+    const img = item.querySelector("img");
+    img.src = d.file;
+    img.width = d.width;
+    const bar = item.querySelector(".budget > div");
+    bar.style.width = Math.min(100, (kb / budget) * 100) + "%";
+    bar.classList.toggle("over", kb > budget);
+    item.querySelector(".meta").innerHTML = rows
+      .map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+    const a = item.querySelector("a.dl");
+    a.href = d.file;
+    a.download = d.filename;
+    a.querySelector("[data-icon]").outerHTML = svgIcon("download");
+    result.appendChild(item);
+  }
   result.classList.remove("hide");
 }

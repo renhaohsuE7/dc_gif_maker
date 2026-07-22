@@ -26,6 +26,16 @@
         <span class="icon" data-icon="sticker"></span>貼圖 320×320 ≤512KB</label>
       <label class="opt"><input type="radio" name="preset" value="emoji">
         <span class="icon" data-icon="smile"></span>表情 128×128 &lt;256KB</label>
+      <label class="opt"><input type="radio" name="preset" value="all">
+        <span class="icon" data-icon="wand"></span>我全都要(貼圖+表情)</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>瘦身策略(GIF)</legend>
+      <label class="opt"><input type="radio" name="strategy" value="" checked>預設(抽幀)</label>
+      <label class="opt"><input type="radio" name="strategy" value="frames">抽幀:保色彩、降幀率</label>
+      <label class="opt"><input type="radio" name="strategy" value="colors">減色:保幀率、縮調色盤</label>
+      <label class="opt"><input type="radio" name="strategy" value="balanced">均衡(實驗中)</label>
     </fieldset>
 
     <fieldset>
@@ -61,12 +71,7 @@
     <p id="error" class="hide"><span class="icon" data-icon="alert"></span><span></span></p>
   </form>
 
-  <section class="card hide" id="result">
-    <img alt="轉換結果預覽">
-    <div class="budget"><div></div></div>
-    <div class="meta"></div>
-    <a class="dl" download><span class="icon" data-icon="download"></span>下載</a>
-  </section>
+  <section class="card hide" id="result"></section>
 
   <footer>ffmpeg palettegen/paletteuse + gifsicle lossy + headless Chromium ·
     自動搜尋塞得進預算的最高幀率</footer>

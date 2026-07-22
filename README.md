@@ -1,7 +1,41 @@
 # dc_emoji_sticker_maker(dcmaker)
 
+> 📦 **Release(latest)**:<https://github.com/renhaohsuE7/dc_gif_maker/releases/latest>
+
 把 **GIF / SVG / PNG** 變成符合 Discord 規格的**貼圖**(正好 320×320、≤512KB)
 或**表情符號**(128×128、<256KB),透明背景全程保留。
+
+## 快速開始(uv)
+
+系統需先有 `ffmpeg` + `gifsicle`(SVG 另需 `librsvg`;動畫 SVG 另需
+Chromium)。不想自備工具 → 用下方 **Docker Compose**,工具全在 image 裡。
+
+```bash
+git clone https://github.com/renhaohsuE7/dc_gif_maker.git && cd dc_gif_maker
+uv run dcmaker samples/original/hajime_todoroki_02.gif                  # 貼圖:320×320、≤512KB
+uv run dcmaker samples/original/hajime_todoroki_02.gif --preset emoji   # 表情:128×128、<256KB
+```
+
+## 未來目標
+
+**一句指令、雙產出**:`dcmaker x.gif --preset all`(規劃中)—— 一次同時產出
+兩種 Discord 素材:**512KB 貼圖**(320×320)與 **256KB 表情**(128×128)。
+
+搭配**三種瘦身策略**(規劃中,`--strategy`),決定「靠什麼」把體積壓進預算:
+
+| 策略 | 作法 | 現況 |
+|------|------|------|
+| **均衡 balanced** | 抽幀 + 減色並用 —— 前身 gif_compressor 時期實測**肉眼效果最好**的方向 | 需系統性實驗驗證哪個 fps×色數組合最佳 |
+| **抽幀 frames** | 主要靠降 fps 塞進 512KB / 256KB;解析度與色彩盡量保留 | 近似現行預設(fps 預算搜尋 + 256 色),可由既有經驗直接推 |
+| **色彩減少 colors** | 主要靠縮調色盤(256 → 128 → 64 → …);幀數與解析度盡量保留 | `--colors` 旗標已有,缺的是把色數納入自動預算搜尋 |
+
+> 現行 `--priority`(frames / balanced / resolution)管的是「幀數 vs 畫面大小」;
+> 新策略軸管「幀數 vs 色彩」,兩者將可組合。
+
+其他排程中:批次模式(OpenSpec change `add-batch-mode` 已就緒)、海報幀 PNG、
+靜態 WebP。
+
+## 特色
 
 - **GIF 路線**:承襲前身專案 gif_compressor 的
   「ffmpeg 最佳化調色盤 + gifsicle lossy + 大小預算搜尋」管線。
@@ -15,9 +49,8 @@
   (幀數與 GIF 相當)。Discord **表情官方支援 WebP**;貼圖官方格式為
   APNG/PNG/GIF,WebP 貼圖上傳未保證接受(表情用最穩)。
 
-Discord 規格(2026-07-02 查證,詳見
-[reference note](docs/references/external_sites/2026-07-02-discord-sticker-emoji-specs.md)):
-貼圖須**正好 320×320**、≤512KB(PNG/APNG 推薦、GIF 可);表情 <256KB、建議 128×128。
+Discord 規格(2026-07-02 依官方文件查證):貼圖須**正好 320×320**、≤512KB
+(PNG/APNG 推薦、GIF 可);表情 <256KB、建議 128×128。
 
 ---
 
@@ -39,13 +72,15 @@ docker compose run --rm -v ./samples:/work dcmaker \
   dcmaker /work/original/star_spin.svg --preset sticker --out-dir /work/output
 ```
 
-### 本機直接跑(不建議,需自備工具)
+### 本機直接跑(uv,需自備媒體工具)
 
 ```bash
 sudo apt install -y ffmpeg gifsicle librsvg2-bin pngquant
-pip install -e .[dev] && playwright install --with-deps chromium
-dcmaker samples/original/star_spin.svg
+uv run playwright install chromium      # 動畫 SVG 截圖才需要
+uv run dcmaker samples/original/star_spin.svg
 ```
+
+`uv run` 會自動依 `pyproject.toml` 建立虛擬環境並安裝套件,不需手動 pip。
 
 ---
 
@@ -193,9 +228,8 @@ GITHUB_TOKEN=github_pat_xxx \
 token 從 `$GITHUB_TOKEN` 讀取,只留在 shell 變數、不會被 log 或 echo。repo 位址
 取自 `DCM_RELEASE_REPO`(見 `.env.example`),留空則自 git remote 推導。
 
-## 已知限制 / 路線圖
+## 已知限制
 
 - 依賴 JavaScript 驅動(rAF)的 SVG 動畫無法定格重現,截圖結果可能不符預期。
-- 批次模式尚未實作。
-- 動畫輸入想取單幀 PNG(海報幀)尚未支援 —— 先自行裁剪。
-- WebP 目前僅動畫輸出(靜態輸入仍走 PNG);靜態 WebP 尚未實作。
+- WebP:Discord 表情官方支援;貼圖上傳未保證接受(貼圖用 APNG/GIF 最穩)。
+- 其餘待辦見上方「[未來目標](#未來目標)」。

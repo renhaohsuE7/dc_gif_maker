@@ -149,6 +149,24 @@ docker compose run --rm dcmaker python -m pytest -v   # 容器內全套(含 e2e)
 python -m pytest tests/test_unit.py -v                # 本機純函式單元測試
 ```
 
+## 規格驅動開發(OpenSpec)
+
+本 repo 導入了 [OpenSpec](https://github.com/Fission-AI/OpenSpec):把「提案 →
+規格 → 任務」留在 repo 裡再動手。專案脈絡與規則寫在 `openspec/config.yaml`
+(技術棧、分層原則、Discord 規格不變量、慣例)。Claude Code 整合在 `.claude/`
+(5 個 skills + `/opsx:*` slash commands)。
+
+```bash
+# 在 Claude Code 內:
+/opsx:propose "為 emoji 加 WebP 靜態輸出"   # 開一個 change proposal
+/opsx:apply                                  # 依 proposal 實作
+/opsx:archive                                # 完成後歸檔並更新 specs
+
+# CLI(無全域安裝,走 npx):
+npx @fission-ai/openspec@1.5.0 list          # 列出進行中的 change / specs
+npx @fission-ai/openspec@1.5.0 validate      # 驗證 change/spec 格式
+```
+
 ## 發佈 Release(半自動)
 
 git tag 是版本的事實來源;**GitHub Release** 是疊在 tag 上的公告頁(release

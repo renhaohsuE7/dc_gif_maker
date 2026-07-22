@@ -1,0 +1,59 @@
+schema: spec-driven
+
+# Project context shown to AI when creating artifacts.
+context: |
+  Project: dcmaker (dc_emoji_sticker_maker) — a Discord emoji/sticker maker.
+  GIF / SVG (static or animated) / PNG in → budget-fitted GIF / APNG / WebP / PNG
+  out, transparency preserved end-to-end. Hard output specs: sticker = exactly
+  320x320, ≤512KB; emoji = 128x128, <256KB (shown at 32px).
+
+  Docker-first (WSL/Ubuntu host). The media toolchain — ffmpeg, gifsicle
+  (pinned 1.95; 1.96's --lossy regresses on flat anime frames), librsvg,
+  pngquant, headless Chromium, Noto CJK/emoji fonts — lives ONLY in the image,
+  never on the host. Package `dcmaker`: Python 3.11+, FastAPI (thin upload page),
+  argparse CLI, Playwright Chromium for animated-SVG frame capture. Deploy via
+  docker compose (web service mem_limit 2g).
+
+  Architecture — strictly layered, dependencies point one way:
+  - transport: cli.py + web/app.py — thin; validate input and delegate, no
+    business logic.
+  - core/: business logic — budget.py (format-agnostic fps×size search),
+    geometry.py, animate.py (GIF/APNG/WebP encoders), static.py, and
+    service.py's convert() facade.
+  - adapters/: every external tool wrapped (ffmpeg, gifsicle, svgrender,
+    browser, pngtools). Core depends on these adapters, never on SDK types.
+  Add an output route by adding a Preset in presets.py and reusing the
+  core/budget.py search — do not scatter tool calls.
+
+  Domain invariants: budget ≈ frames × resolution; trimming clip length is the
+  biggest size lever; dither=none is smallest for flat art; colours can stay 256
+  almost for free. Animated WebP fills the budget with true colour + 8-bit alpha
+  where APNG is too big and GIF must palettize.
+
+  Conventions:
+  - Config/secrets from env (DCM_* vars), never hardcoded; never log secrets.
+  - Every compose service declares a memory limit; every `docker run` sets
+    --memory.
+  - Conventional Commits; branch off main (never commit straight to it). SemVer
+    via annotated tags — the tag is the version source of truth, mirrored in
+    dcmaker.__version__. Cut GitHub Releases with scripts/release.sh (gh).
+  - Web-research notes → docs/references/external_sites/; reference clones →
+    docs/references/external_repos/ (gitignored).
+
+  Testing runs in the image: `docker compose run --rm dcmaker python -m pytest`.
+  Integration tests self-skip when a tool is absent; unit tests are pure
+  functions (run anywhere). Real fixtures live in samples/original/, baselines
+  in samples/output/ (gitignored).
+
+# Per-artifact rules
+rules:
+  proposal:
+    - State non-goals explicitly.
+    - Name the layer(s) touched (transport / core / adapters) and whether a new
+      Preset or output route is involved.
+    - If output geometry or the size budget changes, cite the Discord spec
+      constraint it must still satisfy.
+  tasks:
+    - All build / test / run steps go through Docker (no host media tools).
+    - Include a verification step per task group — pytest, or a real sample
+      conversion checked against the samples/output baselines (size/frames).

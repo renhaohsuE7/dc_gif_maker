@@ -167,21 +167,24 @@ npx @fission-ai/openspec@1.5.0 list          # 列出進行中的 change / specs
 npx @fission-ai/openspec@1.5.0 validate      # 驗證 change/spec 格式
 ```
 
-## 發佈 Release(半自動)
+## 發佈 Release(自動)
 
 git tag 是版本的事實來源;**GitHub Release** 是疊在 tag 上的公告頁(release
-notes + 附件)。`scripts/release.sh` 用容器內建的 `gh` 為「已 push 的 tag」建立
-Release,冪等(已存在就跳過)、自動產生 changelog。
-
-**先設定一次 token**:到 GitHub → Settings → Developer settings → **Fine-grained
-personal access token**,對本 repo 給 **Contents: Read and write**(或用 classic
-token 的 `repo` scope)。**不要**寫進 `.env`;只在發佈當下用環境變數提供:
+notes + 附件)。發版只要打 tag:
 
 ```bash
-# 1) 打 tag 並 push(SemVer,annotated)
 git tag -a v0.3.0 -m "dcmaker v0.3.0 — …" && git push origin v0.3.0
+```
 
-# 2) 建 Release(token 只在這一次注入,不進長跑的 web 容器)
+push tag 後 `.github/workflows/release.yml` 會自動建立 Release(notes = tag
+訊息 + 自動 changelog),用 Actions 內建的 `GITHUB_TOKEN`,本機零 token 管理。
+補建舊 tag:GitHub → Actions → release → **Run workflow** 填 tag 名。
+
+**本地備援**(Actions 不可用時):`scripts/release.sh` 用容器內建的 `gh` 建
+Release,冪等(已存在就跳過)。需要一顆能 push 本 repo 的 token(既有 git 憑證
+即可;或 fine-grained PAT 給 **Contents: Read and write**),只在發佈當下注入:
+
+```bash
 GITHUB_TOKEN=github_pat_xxx \
   docker compose --profile release run --rm release v0.3.0
 #   ...--draft 先存草稿、--latest=false 不標記為最新,皆會轉傳給 gh

@@ -1,0 +1,40 @@
+# Auto-create a GitHub Release whenever a version tag is pushed.
+# Release notes = the annotated tag message + auto-generated changelog.
+# Backfill/re-run: Actions → release → "Run workflow" with an existing tag.
+# Local fallback (no Actions): scripts/release.sh — see README「發佈 Release」.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish a Release for"
+        required: true
+
+permissions:
+  contents: write   # create the Release with the built-in GITHUB_TOKEN
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # all history + tags: notes come from the tag annotation
+      - name: Create release (idempotent)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $tag already exists — nothing to do"
+            exit 0
+          fi
+          # annotated-tag message becomes the notes body; the auto changelog
+          # (commits since the previous tag) is appended by --generate-notes
+          git tag -l --format='%(contents)' "$tag" > /tmp/notes.md
+          gh release create "$tag" -R "$GITHUB_REPOSITORY" \
+            --verify-tag --generate-notes --notes-file /tmp/notes.md

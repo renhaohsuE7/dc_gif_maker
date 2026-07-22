@@ -149,6 +149,29 @@ docker compose run --rm dcmaker python -m pytest -v   # 容器內全套(含 e2e)
 python -m pytest tests/test_unit.py -v                # 本機純函式單元測試
 ```
 
+## 發佈 Release(半自動)
+
+git tag 是版本的事實來源;**GitHub Release** 是疊在 tag 上的公告頁(release
+notes + 附件)。`scripts/release.sh` 用容器內建的 `gh` 為「已 push 的 tag」建立
+Release,冪等(已存在就跳過)、自動產生 changelog。
+
+**先設定一次 token**:到 GitHub → Settings → Developer settings → **Fine-grained
+personal access token**,對本 repo 給 **Contents: Read and write**(或用 classic
+token 的 `repo` scope)。**不要**寫進 `.env`;只在發佈當下用環境變數提供:
+
+```bash
+# 1) 打 tag 並 push(SemVer,annotated)
+git tag -a v0.3.0 -m "dcmaker v0.3.0 — …" && git push origin v0.3.0
+
+# 2) 建 Release(token 只在這一次注入,不進長跑的 web 容器)
+GITHUB_TOKEN=github_pat_xxx \
+  docker compose --profile release run --rm release v0.3.0
+#   ...--draft 先存草稿、--latest=false 不標記為最新,皆會轉傳給 gh
+```
+
+token 從 `$GITHUB_TOKEN` 讀取,只留在 shell 變數、不會被 log 或 echo。repo 位址
+取自 `DCM_RELEASE_REPO`(見 `.env.example`),留空則自 git remote 推導。
+
 ## 已知限制 / 路線圖
 
 - 依賴 JavaScript 驅動(rAF)的 SVG 動畫無法定格重現,截圖結果可能不符預期。

@@ -17,5 +17,23 @@ services:
     volumes:
       - dcmaker-data:/data
 
+  # Release automation — dormant: the `release` profile keeps it out of
+  # `docker compose up`. Run on demand, supplying the token only for that run:
+  #   GITHUB_TOKEN=github_pat_xxx \
+  #     docker compose --profile release run --rm release v0.2.0
+  # (the token never touches the long-running web service above).
+  release:
+    profiles: ["release"]
+    build: .
+    image: dcmaker:latest
+    mem_limit: 512m
+    environment:
+      GH_TOKEN: ${GITHUB_TOKEN:-}
+      DCM_RELEASE_REPO: ${DCM_RELEASE_REPO:-}
+    volumes:
+      - .:/repo:ro
+    working_dir: /repo
+    entrypoint: ["bash", "scripts/release.sh"]
+
 volumes:
   dcmaker-data:

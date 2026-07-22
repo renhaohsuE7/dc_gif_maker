@@ -12,6 +12,16 @@ RUN wget -qO- https://www.lcdf.org/gifsicle/gifsicle-1.95.tar.gz | tar xz \
     && ./configure --disable-gifview --disable-gifdiff \
     && make -j"$(nproc)" && make install
 
+# gh CLI (release automation) fetched here as a static binary — reuses this
+# stage's wget, and only the ~30MB binary is copied into the final image
+# (no third-party apt source, no stale-mirror hash-sum risk).
+ARG GH_VERSION=2.96.0
+RUN arch="$(dpkg --print-architecture)" \
+    && wget -qO- "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${arch}.tar.gz" \
+        | tar xz -C /tmp \
+    && mv "/tmp/gh_${GH_VERSION}_linux_${arch}/bin/gh" /usr/local/bin/gh \
+    && rm -rf /tmp/gh_*
+
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -48,6 +58,8 @@ COPY samples/original ./samples/original
 
 # /usr/local/bin precedes /usr/bin, so the pinned 1.95 shadows apt's 1.96
 COPY --from=gifsicle-build /usr/local/bin/gifsicle /usr/local/bin/gifsicle
+# gh CLI for scripts/release.sh (release automation; not used by the web server)
+COPY --from=gifsicle-build /usr/local/bin/gh /usr/local/bin/gh
 
 EXPOSE 8000
 VOLUME /data

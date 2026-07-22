@@ -34,7 +34,11 @@ jobs:
             exit 0
           fi
           # annotated-tag message becomes the notes body; the auto changelog
-          # (commits since the previous tag) is appended by --generate-notes
+          # (commits since the previous tag) is appended by --generate-notes.
+          # checkout materializes a tag-push ref as a LIGHTWEIGHT tag on the
+          # peeled commit, shadowing the annotation — re-fetch the real tag
+          # object first or %(contents) shows the commit message instead.
+          git fetch --force origin "refs/tags/$tag:refs/tags/$tag"
           git tag -l --format='%(contents)' "$tag" > /tmp/notes.md
           gh release create "$tag" -R "$GITHUB_REPOSITORY" \
             --verify-tag --generate-notes --notes-file /tmp/notes.md

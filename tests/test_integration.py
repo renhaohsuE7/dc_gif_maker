@@ -20,6 +20,21 @@ need_gifsicle = pytest.mark.skipif(
     not shutil.which("gifsicle"), reason="gifsicle not on PATH")
 
 
+def _has_libwebp() -> bool:
+    if not shutil.which("ffmpeg"):
+        return False
+    try:
+        out = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
+                             capture_output=True, text=True).stdout
+        return "libwebp" in out
+    except Exception:
+        return False
+
+
+need_libwebp = pytest.mark.skipif(
+    not _has_libwebp(), reason="ffmpeg built without libwebp")
+
+
 def _has_svg_renderer() -> bool:
     if shutil.which("rsvg-convert"):
         return True
@@ -60,6 +75,21 @@ def test_gif_to_emoji_gif(anim_gif, tmp_path):
     assert (r.width, r.height) == (128, 128)
     assert r.size <= byte_ceiling(256)
     assert r.frames > 1
+
+
+@need_ffmpeg
+@need_libwebp
+def test_gif_to_emoji_webp(anim_gif, tmp_path):
+    out = str(tmp_path / "emoji.webp")
+    r = convert(ConvertRequest(anim_gif, preset="emoji", fmt="webp", out=out))
+    assert r.path == out and os.path.isfile(out)
+    assert r.fmt == "webp"
+    assert (r.width, r.height) == (128, 128)
+    assert r.size <= byte_ceiling(256)
+    assert r.frames > 1                       # ffprobe confirms it animates
+    # RIFF container tagged WEBP
+    magic = open(out, "rb").read(12)
+    assert magic[:4] == b"RIFF" and magic[8:12] == b"WEBP"
 
 
 @need_ffmpeg

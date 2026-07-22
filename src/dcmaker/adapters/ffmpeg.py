@@ -84,6 +84,18 @@ class FFmpeg:
              "-vf", f"{chain},format=rgba",
              "-f", "apng", "-plays", "0", "-pred", "mixed", out], check=True)
 
+    def webp(self, src: InputSpec, chain: str, out: str,
+             quality: int) -> None:
+        """Animated WebP, true colour + full 8-bit alpha, infinite loop. No GIF
+        palette/dithering and far smaller than APNG, so it fills a budget with
+        much higher fidelity. `-preset drawing` + max compression suit
+        flat-colour anime art; `quality` is libwebp's 0-100 lossy scale."""
+        run([self.ffmpeg, "-y", "-v", "error", *src.args,
+             "-vf", f"{chain},format=rgba",
+             "-c:v", "libwebp_anim", "-loop", "0", "-preset", "drawing",
+             "-compression_level", "6", "-lossless", "0",
+             "-q:v", str(quality), out], check=True)
+
     def still_png(self, src_png: str, chain: str, out: str) -> None:
         """Apply a scale/pad chain to a single image (static route)."""
         run([self.ffmpeg, "-y", "-v", "error", "-i", src_png,

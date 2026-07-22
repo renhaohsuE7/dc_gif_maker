@@ -4,6 +4,7 @@ Examples:
     dcmaker samples/original/x.gif                          # sticker GIF
     dcmaker samples/original/x.gif --preset emoji           # emoji GIF
     dcmaker samples/original/x.gif --format apng            # sticker APNG
+    dcmaker samples/original/x.gif --format webp            # animated WebP
     dcmaker samples/original/logo.svg                       # static -> PNG
     dcmaker samples/original/anim.svg --duration 4          # animated SVG
     dcmaker samples/original/x.gif --ss 0 --to 5 --priority resolution
@@ -28,7 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
                        f"{k} = {v.desc}" for k, v in PRESETS.items()))
     p.add_argument("--format", dest="fmt", choices=list(FORMATS),
                    default="auto",
-                   help="auto = gif for animated inputs, png for static")
+                   help="auto = gif for animated inputs, png for static; "
+                        "gif | apng | webp for animation; png for static")
     p.add_argument("--priority", choices=list(PRIORITIES), default=None,
                    help="frames (smoothest) | resolution (biggest artwork) | "
                         "balanced (default: preset's)")
@@ -40,6 +42,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "from the animation, else DCM_DEFAULT_DURATION)")
     p.add_argument("--lossy", type=int, default=None,
                    help="GIF gifsicle lossy strength (default: preset's)")
+    p.add_argument("--quality", type=int, default=None,
+                   help="WebP libwebp quality 0-100, higher = better/bigger "
+                        "(default: preset's)")
     p.add_argument("--colors", type=int, default=256)
     p.add_argument("--dither", default="none")
     p.add_argument("--min-fps", type=float, default=None)
@@ -53,8 +58,8 @@ def main(argv: list[str] | None = None) -> None:
     req = ConvertRequest(
         input_path=args.input, preset=args.preset, fmt=args.fmt,
         priority=args.priority, ss=args.ss, to=args.to,
-        duration=args.duration, lossy=args.lossy, colors=args.colors,
-        dither=args.dither, min_fps=args.min_fps,
+        duration=args.duration, lossy=args.lossy, quality=args.quality,
+        colors=args.colors, dither=args.dither, min_fps=args.min_fps,
         out=args.out, out_dir=args.out_dir)
     try:
         r = convert(req, progress=print)

@@ -22,7 +22,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUT_DIR, exist_ok=True)
 
 ALLOWED_EXTS = {".gif", ".svg", ".png", ".jpg", ".jpeg", ".webp"}
-_SAFE_NAME = re.compile(r"^[a-f0-9]{32}-dc_[a-z]+_[a-z]+\.(gif|png)$")
+_SAFE_NAME = re.compile(r"^[a-f0-9]{32}-dc_[a-z]+_[a-z]+\.(gif|png|webp)$")
+_MEDIA = {"gif": "image/gif", "webp": "image/webp", "png": "image/png"}
 
 app = FastAPI(title="dcmaker", version=__version__)
 
@@ -97,7 +98,7 @@ def get_file(name: str):
     path = os.path.join(OUT_DIR, name)
     if not os.path.isfile(path):
         raise HTTPException(404)
-    media = "image/gif" if name.endswith(".gif") else "image/png"
+    media = _MEDIA.get(name.rsplit(".", 1)[-1], "image/png")
     return FileResponse(path, media_type=media, filename=name)
 
 

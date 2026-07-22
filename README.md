@@ -10,6 +10,10 @@
   CSS/WAAPI 動畫**暫停後逐幀定格截圖**(透明背景),再餵進同一套壓縮管線 →
   GIF 或 APNG。
 - **APNG**:全 8-bit alpha(半透明邊緣比 GIF 的 1-bit 透明漂亮),Discord 貼圖官方推薦。
+- **WebP**:動畫 WebP,真彩 + 全 8-bit alpha(無 GIF 調色盤與抖動),體積卻只有
+  APNG 的零頭 —— 在同一預算內填進**接近 APNG 的畫質**而非 GIF 的調色盤觀感
+  (幀數與 GIF 相當)。Discord **表情官方支援 WebP**;貼圖官方格式為
+  APNG/PNG/GIF,WebP 貼圖上傳未保證接受(表情用最穩)。
 
 Discord 規格(2026-07-02 查證,詳見
 [reference note](docs/references/external_sites/2026-07-02-discord-sticker-emoji-specs.md)):
@@ -48,16 +52,18 @@ dcmaker samples/original/star_spin.svg
 ## CLI 用法
 
 ```bash
-dcmaker INPUT [--preset sticker|emoji] [--format auto|gif|apng|png]
+dcmaker INPUT [--preset sticker|emoji] [--format auto|gif|apng|webp|png]
               [--priority frames|balanced|resolution]
               [--ss T --to T]            # 裁短(體積最大的槓桿)
               [--duration N]             # 動畫 SVG:截取秒數(預設自動偵測)
-              [--lossy N --colors N --dither D --min-fps F]
+              [--lossy N]                # GIF gifsicle lossy 強度
+              [--quality N]              # WebP libwebp 品質 0-100(越高越好越大)
+              [--colors N --dither D --min-fps F]
               [--out FILE | --out-dir DIR]
 ```
 
-路由規則:輸入是動畫(GIF / 動畫 SVG)→ 預設 GIF,可選 APNG;輸入是靜態
-(SVG / PNG / JPG / WebP)→ PNG。輸入放 `samples/original/` 時產出自動寫到
+路由規則:輸入是動畫(GIF / 動畫 SVG)→ 預設 GIF,可選 APNG 或 WebP;輸入是
+靜態(SVG / PNG / JPG / WebP)→ PNG。輸入放 `samples/original/` 時產出自動寫到
 `samples/output/`。
 
 範例:
@@ -66,6 +72,7 @@ dcmaker INPUT [--preset sticker|emoji] [--format auto|gif|apng|png]
 dcmaker x.gif                                  # 貼圖 GIF(320×320 ≤512KB)
 dcmaker x.gif --preset emoji                   # 表情 GIF(128×128 <256KB)
 dcmaker x.gif --format apng                    # 貼圖 APNG(8-bit alpha)
+dcmaker x.gif --preset emoji --format webp     # 表情 WebP(真彩+8-bit 透明)
 dcmaker x.gif --ss 0 --to 5 --priority resolution   # 裁短 → 又大又順
 dcmaker logo.svg --preset emoji                # 靜態 SVG → 透明 PNG
 dcmaker anim.svg --duration 4                  # 動畫 SVG → GIF
@@ -90,6 +97,8 @@ dcmaker anim.svg --duration 4                  # 動畫 SVG → GIF
    - GIF:ffmpeg `palettegen`(保留透明)→ `paletteuse`(`dither=none` +
      `diff_mode=rectangle`)→ `gifsicle -O3 --lossy`。
    - APNG:ffmpeg `-f apng -plays 0 -pred mixed`(rgba,全 alpha)。
+   - WebP:ffmpeg `libwebp_anim`(rgba,`-preset drawing -compression_level 6`,
+     `-q:v` 品質;塞不進預算時自動降品質)。
 4. **取向挑選**:`frames`(最順)/ `balanced` / `resolution`(角色最大)。
 
 ### 靜態路線(SVG / 點陣圖)
@@ -143,5 +152,6 @@ python -m pytest tests/test_unit.py -v                # 本機純函式單元測
 ## 已知限制 / 路線圖
 
 - 依賴 JavaScript 驅動(rAF)的 SVG 動畫無法定格重現,截圖結果可能不符預期。
-- WebP 輸出、批次模式尚未實作。
+- 批次模式尚未實作。
 - 動畫輸入想取單幀 PNG(海報幀)尚未支援 —— 先自行裁剪。
+- WebP 目前僅動畫輸出(靜態輸入仍走 PNG);靜態 WebP 尚未實作。

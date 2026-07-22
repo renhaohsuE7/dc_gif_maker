@@ -18,13 +18,16 @@ from ..adapters.pngtools import PngQuant
 from ..adapters.svgrender import SvgRenderer
 from ..config import Settings, load_settings
 from ..presets import PRESETS, PRIORITIES, Preset
-from .animate import ApngEncoder, GifEncoder, compress_animated, make_scratch
+from .animate import (ApngEncoder, Encoder, GifEncoder, WebpEncoder,
+                      compress_animated, make_scratch)
 from .budget import FitResult
 from .detect import detect_kind
 from .geometry import build_trim, parse_time
 
-FORMATS = ("auto", "gif", "apng", "png")
+FORMATS = ("auto", "gif", "apng", "png", "webp")
 ANIMATED_KINDS = {"gif", "svg-animated"}
+# output file extension per resolved format (apng is a .png container)
+_EXT = {"gif": "gif", "apng": "png", "png": "png", "webp": "webp"}
 
 
 @dataclass
@@ -37,6 +40,7 @@ class ConvertRequest:
     to: str | None = None            # trim end
     duration: float | None = None    # animated SVG: capture length (auto)
     lossy: int | None = None         # GIF route only; default: preset's
+    quality: int | None = None       # WebP route only; default: preset's
     colors: int = 256
     dither: str = "none"
     min_fps: float | None = None
@@ -64,10 +68,10 @@ def resolve_format(kind: str, fmt: str) -> str:
         raise ValueError(f"format must be one of {FORMATS}")
     if kind in ANIMATED_KINDS:
         if fmt == "png":
-            raise ValueError(
-                "input is animated; pick gif or apng (or trim it yourself)")
+            raise ValueError("input is animated; pick gif, apng or webp "
+                             "(or trim it yourself)")
         return "gif" if fmt == "auto" else fmt
-    if fmt in ("gif", "apng"):
+    if fmt in ("gif", "apng", "webp"):
         raise ValueError("input is static; there is nothing to animate — "
                          "output format is png")
     return "png"
@@ -103,7 +107,7 @@ def convert(req: ConvertRequest, settings: Settings | None = None,
 
     kind = detect_kind(req.input_path)
     fmt = resolve_format(kind, req.fmt)
-    ext = "gif" if fmt == "gif" else "png"
+    ext = _EXT[fmt]
     out = derive_out(req.input_path, f"dc_{preset.name}_{fmt}", ext,
                      req.out, req.out_dir)
 
@@ -141,6 +145,7 @@ def _animated(req: ConvertRequest, settings: Settings, preset: Preset,
     min_fps = req.min_fps if req.min_fps is not None else preset.min_fps
     priority = req.priority or preset.priority
     lossy = req.lossy if req.lossy is not None else preset.lossy
+    quality = req.quality if req.quality is not None else preset.webp_quality
     notes: list[str] = []
 
     with make_scratch() as tmp:
@@ -161,28 +166,47 @@ def _animated(req: ConvertRequest, settings: Settings, preset: Preset,
 
         progress(f"[source] {src.width}x{src.height}  {src.frames} frames  "
                  f"{src.fps:g}fps")
-        # borderline clips can miss the budget at the preset's lossy level;
-        # escalate (visible artifacts beat "does not fit") unless the user
-        # pinned --lossy themselves
-        lossy_steps = ([lossy] if req.lossy is not None or fmt != "gif"
-                       else [lossy, lossy + 40, lossy + 80])
-        for i, step in enumerate(lossy_steps):
+        # borderline clips can miss the budget at the preset's default
+        # quality knob; escalate toward more compression (visible artifacts
+        # beat "does not fit") unless the user pinned the knob themselves.
+        # GIF's lossy climbs; WebP's quality drops; APNG has no such knob.
+        if fmt == "gif":
+            knob = "lossy"
+            steps: list[int | None] = (
+                [lossy] if req.lossy is not None
+                else [lossy, lossy + 40, lossy + 80])
+        elif fmt == "webp":
+            knob = "quality"
+            steps = ([quality] if req.quality is not None
+                     else list(dict.fromkeys(
+                         [quality, max(quality - 20, 20),
+                          max(quality - 40, 10)])))
+        else:  # apng: no quality knob to escalate
+            knob = ""
+            steps = [None]
+
+        def make_encoder(step: int | None) -> Encoder:
             if fmt == "gif":
-                enc = GifEncoder(ff, Gifsicle(settings.gifsicle), src, tmp,
-                                 req.colors, req.dither, step)
-            else:
-                enc = ApngEncoder(ff, src, tmp)
+                return GifEncoder(ff, Gifsicle(settings.gifsicle), src, tmp,
+                                  req.colors, req.dither, step)
+            if fmt == "webp":
+                return WebpEncoder(ff, src, tmp, step)
+            return ApngEncoder(ff, src, tmp)
+
+        for i, step in enumerate(steps):
             try:
-                r = compress_animated(ff, enc, src, trim, preset, priority,
-                                      min_fps, out, tmp, progress)
+                r = compress_animated(make_encoder(step), src, trim,
+                                      preset, priority, min_fps, out, tmp,
+                                      progress)
                 if i:
-                    notes.append(f"lossy escalated to {step} to fit budget")
+                    verb = "raised" if fmt == "gif" else "lowered"
+                    notes.append(f"{knob} {verb} to {step} to fit budget")
                 break
             except ValueError:
-                if i == len(lossy_steps) - 1:
+                if i == len(steps) - 1:
                     raise
-                progress(f"[retry] nothing fits at lossy={step}, "
-                         f"trying lossy={lossy_steps[i + 1]}")
+                progress(f"[retry] nothing fits at {knob}={step}, "
+                         f"trying {knob}={steps[i + 1]}")
     res = _result(r, fmt, kind, preset)
     res.notes = notes
     return res

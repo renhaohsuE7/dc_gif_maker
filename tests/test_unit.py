@@ -4,6 +4,7 @@ import tempfile
 
 import pytest
 
+from dcmaker.core.animate import webp_info
 from dcmaker.core.budget import FitResult, byte_ceiling, choose, fit_fps
 from dcmaker.core.detect import detect_kind
 from dcmaker.core.geometry import (build_trim, content_sizes, geom_square,
@@ -51,6 +52,31 @@ def test_fit_fps_finds_highest_fitting_fps():
 
 def test_fit_fps_returns_none_when_nothing_fits():
     assert fit_fps(lambda f: 10_000_000, 10.0, 2.0, 500_000) is None
+
+
+# -------------------------------------------------------------------- webp
+def _webp_bytes(w: int, h: int, nframes: int) -> bytes:
+    """Minimal animated-WebP RIFF: VP8X canvas header + N empty ANMF chunks."""
+    def u24(n: int) -> bytes:
+        return n.to_bytes(3, "little")
+    vp8x = (b"VP8X" + (10).to_bytes(4, "little")
+            + bytes([0x02, 0, 0, 0]) + u24(w - 1) + u24(h - 1))
+    anmf = b"".join(b"ANMF" + (0).to_bytes(4, "little") for _ in range(nframes))
+    body = b"WEBP" + vp8x + anmf
+    return b"RIFF" + len(body).to_bytes(4, "little") + body
+
+
+def test_webp_info_reads_canvas_and_frame_count(tmp_path):
+    path = tmp_path / "x.webp"
+    path.write_bytes(_webp_bytes(128, 320, 7))
+    assert webp_info(str(path)) == (128, 320, 7)
+
+
+def test_webp_info_rejects_non_webp(tmp_path):
+    path = tmp_path / "x.webp"
+    path.write_bytes(b"NOPEabcdNOPE")
+    with pytest.raises(Exception):
+        webp_info(str(path))
 
 
 # ---------------------------------------------------------------- geometry
@@ -103,10 +129,14 @@ def test_detect_rejects_unknown_ext():
 def test_resolve_format_routing():
     assert resolve_format("gif", "auto") == "gif"
     assert resolve_format("svg-animated", "apng") == "apng"
+    assert resolve_format("gif", "webp") == "webp"          # animated -> webp
+    assert resolve_format("svg-animated", "webp") == "webp"
     assert resolve_format("svg-static", "auto") == "png"
     assert resolve_format("raster", "auto") == "png"
     with pytest.raises(ValueError):
         resolve_format("svg-static", "gif")   # nothing to animate
+    with pytest.raises(ValueError):
+        resolve_format("svg-static", "webp")  # webp is animated-only here
     with pytest.raises(ValueError):
         resolve_format("gif", "png")          # animated -> not png
 

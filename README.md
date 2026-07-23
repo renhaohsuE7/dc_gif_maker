@@ -25,9 +25,9 @@ uv run dcmaker samples/original/hajime_todoroki_02.gif --preset emoji   # 表情
 
 | 策略 | 作法 | 狀態 |
 |------|------|------|
-| **抽幀 frames**(預設) | 主要靠降 fps;解析度與色彩(256 色)盡量保留 | ✅ 已實作 |
-| **色彩減少 colors** | 保住源幀率,走色階梯 256→192→128→96→64→48→32;梯底仍不行才降 fps | ✅ 已實作(實測 hajime 貼圖:123 幀/256 色 → **190 幀**/32 色) |
-| **均衡 balanced** | 抽幀 + 減色並用 —— 前身 gif_compressor 實測肉眼效果最好的方向 | 🧪 實驗中:`scripts/strategy_matrix.py` 產出對照表,由肉眼排名決定組合後升為預設 |
+| **均衡 balanced**(預設) | 抽幀 + 減色並用:貼圖釘 **96 色**、表情釘 **32 色**,再搜最高 fps —— 2026-07-23 肉眼實驗定案([紀錄](docs/experiments/2026-07-23-strategy-matrix.md)) | ✅ 預設 |
+| **抽幀 frames** | 主要靠降 fps;色彩(256 色)盡量保留(舊預設行為) | ✅ |
+| **色彩減少 colors** | 保住源幀率,走色階梯 256→192→128→96→64→48→32;梯底仍不行才降 fps | ✅(實測 hajime 貼圖:123 幀/256 色 → **190 幀**/32 色) |
 
 > `--priority`(frames / balanced / resolution)管「幀數 vs 畫面大小」;
 > `--strategy` 管「幀數 vs 色彩」,兩軸可組合。`--colors N` 可釘死色數

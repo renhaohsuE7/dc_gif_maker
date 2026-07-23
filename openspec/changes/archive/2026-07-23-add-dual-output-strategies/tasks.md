@@ -43,13 +43,13 @@
       {256,128,96,64,32}, fps auto-fitted per cell so every cell meets its
       budget; emit contact-sheet HTML to `samples/output/strategy_matrix/`
       with colours/fps/frames/KB labels.
-- [ ] 4.2 User ranks the contact sheet by eye (肉眼效果 is the criterion);
+- [x] 4.2 User ranks the contact sheet by eye (肉眼效果 is the criterion);
       optional SSIM as secondary reference only.
-- [ ] 4.3 Record ranking + chosen combination in
+- [x] 4.3 Record ranking + chosen combination in
       `docs/experiments/<date>-strategy-matrix.md` (committed).
-- [ ] 4.4 Implement the winner as `balanced`; switch the default strategy to
+- [x] 4.4 Implement the winner as `balanced`; switch the default strategy to
       `balanced`; cite the experiment record in `presets.py` docstring.
-- [ ] 4.5 Verify: pytest green; re-run hajime baselines to confirm the new
+- [x] 4.5 Verify: pytest green; re-run hajime baselines to confirm the new
       default still meets both budgets and matches the ranked winner's
       fps/colours.
 
@@ -57,6 +57,6 @@
 
 - [x] 5.1 README: move 未來目標's dual-output + strategies rows to implemented
       CLI docs (`--preset all`, `--strategy`), keep the experiment link.
-- [ ] 5.2 Verify: `npx @fission-ai/openspec@1.5.0 validate
+- [x] 5.2 Verify: `npx @fission-ai/openspec@1.5.0 validate
       add-dual-output-strategies --strict` passes; archive the change after
       apply (`/opsx:archive`) so specs/ absorbs the two new capabilities.

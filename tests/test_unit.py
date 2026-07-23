@@ -14,7 +14,7 @@ from dcmaker.core.geometry import (build_trim, content_sizes, geom_square,
 from dcmaker.core.service import (ConvertRequest, convert, convert_all,
                                   convert_many, derive_out, is_batch_input,
                                   iter_inputs, resolve_format)
-from dcmaker.presets import DEFAULT_STRATEGY, STRATEGIES
+from dcmaker.presets import DEFAULT_STRATEGY, PRESETS, STRATEGIES
 
 
 # ------------------------------------------------------------------ budget
@@ -91,11 +91,16 @@ def test_fit_strategy_single_rung_is_fps_search():
 
 
 def test_strategies_table():
-    assert DEFAULT_STRATEGY in STRATEGIES
+    assert DEFAULT_STRATEGY == "balanced"       # validated 2026-07-23
     assert STRATEGIES["frames"].rungs == (256,)
     ladder = STRATEGIES["colors"].rungs
     assert ladder[0] == 256 and list(ladder) == sorted(ladder, reverse=True)
     assert STRATEGIES["colors"].pin_fps and not STRATEGIES["frames"].pin_fps
+    # balanced resolves per preset: the eye-ranked palettes from the
+    # strategy-matrix experiment (docs/experiments/2026-07-23-…)
+    assert STRATEGIES["balanced"].rungs == ()
+    assert PRESETS["sticker"].balanced_colors == 96
+    assert PRESETS["emoji"].balanced_colors == 32
 
 
 def test_strategy_rejected_off_gif_route(tmp_path):

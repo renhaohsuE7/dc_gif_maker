@@ -164,6 +164,8 @@ def _animated(req: ConvertRequest, settings: Settings, preset: Preset,
     # a user-pinned --colors freezes the palette dimension entirely
     strat = STRATEGIES[req.strategy or DEFAULT_STRATEGY]
     rungs, pin_fps = strat.rungs, strat.pin_fps
+    if not rungs:                        # balanced: per-preset eye-ranked palette
+        rungs = (preset.balanced_colors,)
     if req.colors is not None:
         rungs, pin_fps = (req.colors,), False
     notes: list[str] = []

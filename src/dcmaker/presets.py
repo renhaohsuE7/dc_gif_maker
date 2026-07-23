@@ -22,6 +22,9 @@ class Preset:
     # candidate artwork sizes as a fraction of the canvas; smaller artwork
     # leaves a transparent margin but buys many more frames under budget
     content_fracs: tuple[float, ...] = (1.0,)
+    # `balanced` strategy palette — the eye-ranked winner per preset, see
+    # docs/experiments/2026-07-23-strategy-matrix.md
+    balanced_colors: int = 256
 
 
 STICKER = Preset(
@@ -30,6 +33,7 @@ STICKER = Preset(
     target_kb=512, canvas=320, lossy=100, webp_quality=80, min_fps=2.0,
     priority="frames",
     content_fracs=(0.44, 0.53, 0.63, 0.75, 0.88, 1.0),
+    balanced_colors=96,   # viewed large: banding shows, keep colour fidelity
 )
 
 EMOJI = Preset(
@@ -38,6 +42,7 @@ EMOJI = Preset(
     target_kb=256, canvas=128, lossy=60, webp_quality=72, min_fps=4.0,
     priority="frames",
     content_fracs=(1.0,),
+    balanced_colors=32,   # shown at 32px: colours invisible, buy frames
 )
 
 PRESETS: dict[str, Preset] = {p.name: p for p in (STICKER, EMOJI)}
@@ -68,11 +73,11 @@ COLORS = Strategy(
 
 BALANCED = Strategy(
     name="balanced",
-    desc="frames + colours blend — PROVISIONAL until the strategy-matrix "
-         "experiment (openspec change add-dual-output-strategies) ranks the "
-         "combinations by eye and picks the winner",
-    rungs=(128,), pin_fps=False)
+    desc="eye-validated frames+colours blend: per-preset palette (sticker 96, "
+         "emoji 32) + fps search — see "
+         "docs/experiments/2026-07-23-strategy-matrix.md",
+    rungs=(), pin_fps=False)   # empty = resolved from Preset.balanced_colors
 
 STRATEGIES: dict[str, Strategy] = {s.name: s
                                    for s in (BALANCED, FRAMES, COLORS)}
-DEFAULT_STRATEGY = "frames"   # switches to "balanced" once validated
+DEFAULT_STRATEGY = "balanced"   # validated 2026-07-23 (strategy-matrix)

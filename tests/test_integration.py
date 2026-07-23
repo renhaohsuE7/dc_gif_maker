@@ -76,6 +76,7 @@ def test_gif_to_emoji_gif(anim_gif, tmp_path):
     assert (r.width, r.height) == (128, 128)
     assert r.size <= byte_ceiling(256)
     assert r.frames > 1
+    assert r.colors == 32     # default strategy = balanced -> emoji palette
 
 
 @need_ffmpeg
